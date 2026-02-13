@@ -2,7 +2,7 @@
 // @name         123云盘文件批量重命名助手
 // @name:en      123FastRename
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @description  123云盘文件批量重命名助手
 // @author       meguoe
 // @license      Apache-2.0
@@ -1741,7 +1741,7 @@
                         const originalFileName = item.dataset.originalFileName;
                         let newName = originalFileName;
 
-                        if (regexPattern && replaceText) {
+                        if (regexPattern) {
                             try {
                                 const regex = new RegExp(regexPattern, 'g');
                                 newName = originalFileName.replace(regex, replaceText);
