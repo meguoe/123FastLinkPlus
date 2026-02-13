@@ -1689,7 +1689,7 @@
                         const originalFileName = item.dataset.originalFileName;
                         let newName = originalFileName;
 
-                        if (findText && replaceText) {
+                        if (findText) {
                             if (ignoreCase) {
                                 const regex = new RegExp(findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
                                 newName = originalFileName.replace(regex, replaceText);
