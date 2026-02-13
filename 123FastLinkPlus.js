@@ -1,6 +1,7 @@
 // ==UserScript==
-// @name         123FastLinkPlus
-// @version      1.0.1
+// @name         123云盘文件批量转存助手
+// @name:en      123FastLinkPlus
+// @version      1.0.2
 // @description  一键将夸克网盘、天翼云盘的个人文件和分享链接转存到123云盘
 // @author       meguoe
 // @license      Apache-2.0
