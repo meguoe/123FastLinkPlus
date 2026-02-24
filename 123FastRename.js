@@ -1473,6 +1473,7 @@
                                     failCount++;
                                 }
                             }
+                            fileItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }
                     }
                     
