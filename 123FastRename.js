@@ -2,8 +2,12 @@
 // @name         123云盘文件批量重命名助手
 // @name:en      123FastRename
 // @namespace    http://tampermonkey.net/
-// @version      1.0.4
+// @version      1.0.5
 // @description  123云盘文件批量重命名助手
+// @supportURL   https://bbs.tampermonkey.net.cn/thread-10041-1-1.html
+// @homepageURL  https://github.com/meguoe/123FastLinkPlus
+// @updateURL    https://raw.githubusercontent.com/meguoe/123FastLinkPlus/refs/heads/main/123FastRename.js
+// @downloadURL  https://raw.githubusercontent.com/meguoe/123FastLinkPlus/refs/heads/main/123FastRename.js
 // @author       meguoe
 // @license      Apache-2.0
 // @match        *://*.123pan.com/*
