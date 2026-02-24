@@ -2,7 +2,7 @@
 // @name         123云盘文件批量重命名助手
 // @name:en      123FastRename
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.4
 // @description  123云盘文件批量重命名助手
 // @author       meguoe
 // @license      Apache-2.0
