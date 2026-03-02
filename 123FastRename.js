@@ -2,7 +2,7 @@
 // @name         123云盘文件批量重命名助手
 // @name:en      123FastRename
 // @namespace    http://tampermonkey.net/
-// @version      1.0.6
+// @version      1.0.7
 // @description  123云盘文件批量重命名助手，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、历史记录等功能
 // @supportURL   https://bbs.tampermonkey.net.cn/thread-10041-1-1.html
 // @homepageURL  https://github.com/meguoe/123FastLinkPlus
@@ -1006,11 +1006,14 @@
                 return;
             }
 
+            const firstButton = container.querySelector('button');
+            const buttonClass = firstButton ? firstButton.className : 'ant-btn css-1doczi2 css-var-_r_0_ ant-btn-primary ant-btn-color-primary ant-btn-variant-solid ant-dropdown-trigger mfy-button upload-button mfy-button';
+
             const btnContainer = document.createElement('div');
             btnContainer.className = 'sfr-button-container';
 
             const btn = document.createElement('button');
-            btn.className = 'ant-btn css-1doczi2 css-1oxmu1t css-var-_r_0_ ant-btn-primary ant-btn-color-primary ant-btn-variant-solid ant-dropdown-trigger mfy-button upload-button mfy-button';
+            btn.className = buttonClass;
             btn.innerHTML = `<span>批量重命名</span>`;
 
             btn.addEventListener('click', () => {
