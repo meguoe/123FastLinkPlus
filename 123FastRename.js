@@ -2,8 +2,8 @@
 // @name         123云盘文件批量重命名助手
 // @name:en      123FastRename
 // @namespace    http://tampermonkey.net/
-// @version      1.0.7
-// @description  123云盘文件批量重命名助手，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、历史记录等功能
+// @version      1.0.8
+// @description  123云盘文件批量重命名助手（已被123云盘官方支持），支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、历史记录等功能
 // @supportURL   https://bbs.tampermonkey.net.cn/thread-10041-1-1.html
 // @homepageURL  https://github.com/meguoe/123FastLinkPlus
 // @updateURL    https://raw.githubusercontent.com/meguoe/123FastLinkPlus/refs/heads/main/123FastRename.js
@@ -22,6 +22,13 @@
 (function () {
     'use strict';
 
+    // 工具函数：解析文件名和扩展名
+    function parseFileName(fileName) {
+        if (!fileName || !fileName.includes('.')) return { name: fileName || '', ext: '' };
+        const lastDot = fileName.lastIndexOf('.');
+        return { name: fileName.substring(0, lastDot), ext: fileName.substring(lastDot) };
+    }
+
     const CONSTANTS = {
         API_DELAY: 100,
         PAGE_SIZE: 100,
@@ -30,10 +37,6 @@
         TEXT_COLOR: '#919191',
         TEXT_COLOR_DARK: '#333',
         TEXT_COLOR_LIGHT: '#999',
-        DELETE_BTN_COLOR: '#ff4d4f',
-        DELETE_BTN_HOVER: '#f44336',
-        MODAL_Z_INDEX: 9999,
-        FILE_TYPE_FILE: 0,
         FILE_TYPE_FOLDER: 1,
         CATEGORY_VIDEO: '2',
         DEBUG_MODE: false
@@ -89,7 +92,6 @@
             display: flex;
             font-size: 14px;
             flex-direction: column;
-            box-shadow: 0px 4px 60px 0px rgba(0, 0, 0, 0.1);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
@@ -181,9 +183,9 @@
         }
 
         .sfr-file-delete-btn {
-            padding: 2px !important;
-            width: 16px !important;
-            height: 16px !important;
+            padding: 2px;
+            width: 16px;
+            height: 16px;
             border: none;
             background: #ff4d4f;
             color: #fff;
@@ -344,11 +346,7 @@
             gap: 8px;
         }
 
-        .sfr-checkbox-button:hover {
-            border-color: #2961D9;
-            color: #2961D9;
-        }
-
+        .sfr-checkbox-button:hover,
         .sfr-checkbox-button[data-checked="true"] {
             border-color: #2961D9;
             color: #2961D9;
@@ -422,6 +420,45 @@
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+
+        .sfr-btn {
+            padding: 4px 15px;
+            height: 32px;
+            font-size: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid #d9d9d9;
+            background: #fff;
+            color: rgba(0, 0, 0, 0.88);
+            transition: all 0.2s;
+        }
+
+        .sfr-btn:hover {
+            color: #2961D9;
+            border-color: #2961D9;
+        }
+
+        .sfr-btn-primary {
+            padding: 4px 15px;
+            height: 32px;
+            font-size: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid #2961D9;
+            background: #2961D9;
+            color: #fff;
+            transition: all 0.2s;
+        }
+
+        .sfr-btn-primary:hover {
+            background: #1d4bbf;
+            border-color: #1d4bbf;
+        }
+
+        .sfr-btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
     `;
 
@@ -537,8 +574,8 @@
     // 2. 选中文件管理类
     class TableRowSelector {
         constructor() {
-            this.selectedRowKeys = [];
-            this.unselectedRowKeys = [];
+            this.selectedRowKeys = new Set();
+            this.unselectedRowKeys = new Set();
             this.isSelectAll = false;
             this._inited = false;
             this._callbacks = [];
@@ -551,96 +588,91 @@
             this._inited = true;
 
             this._observeBreadcrumb();
+            this._observeRowSelection();
+        }
 
-            const originalCreateElement = document.createElement;
+        _observeRowSelection() {
             const self = this;
-            document.createElement = function (tagName, options) {
-                const element = originalCreateElement.call(document, tagName, options);
-                if (!(tagName.toLowerCase() === 'input')) {
-                    return element;
-                }
-                const observer = new MutationObserver(() => {
-                    if (element.classList.contains('ant-checkbox-input')) {
-                        const isSelectAll = element.getAttribute('aria-label') === 'Select all';
-                        const tableRow = element.closest('.ant-table-row');
-                        
-                        if (!isSelectAll && !tableRow) {
-                            observer.disconnect();
-                            return;
-                        }
-                        
-                        if (isSelectAll) {
-                            self.unselectedRowKeys = [];
-                            self.selectedRowKeys = [];
-                            self.isSelectAll = false;
-                            self._bindSelectAllEvent(element);
+
+            // 监听全选事件
+            const selectAllClickHandler = (e) => {
+                const checkbox = e.target.closest('.ant-checkbox-input[aria-label="Select all"]');
+                if (!checkbox) return;
+                // 延迟执行，等 DOM 更新完成后再读取状态
+                setTimeout(() => {
+                    if (checkbox.checked) {
+                        self.isSelectAll = true;
+                        self.unselectedRowKeys = new Set();
+                        self.selectedRowKeys = new Set();
+                    } else {
+                        self.isSelectAll = false;
+                        self.selectedRowKeys = new Set();
+                        self.unselectedRowKeys = new Set();
+                    }
+                    self._notifyCallbacks();
+                }, 0);
+            };
+            this._selectAllClickHandler = selectAllClickHandler;
+            document.addEventListener('click', selectAllClickHandler);
+
+            // 监听行的 class 变化，通过 ant-table-row-selected 推导选中状态
+            let rowDebounceTimer = null;
+            const pendingRowChanges = new Map(); // rowKey -> isSelected
+
+            const processRowChanges = () => {
+                for (const [rowKey, isSelected] of pendingRowChanges) {
+                    if (self.isSelectAll) {
+                        if (isSelected) {
+                            self.unselectedRowKeys.delete(rowKey);
                         } else {
-                            const input = element;
-                            input.addEventListener('click', function () {
-                                const rowKey = tableRow.getAttribute('data-row-key');
-                                if (self.isSelectAll) {
-                                    if (!this.checked) {
-                                        if (!self.unselectedRowKeys.includes(rowKey)) {
-                                            self.unselectedRowKeys.push(rowKey);
-                                        }
-                                    } else {
-                                        const idx = self.unselectedRowKeys.indexOf(rowKey);
-                                        if (idx > -1) {
-                                            self.unselectedRowKeys.splice(idx, 1);
-                                        }
-                                    }
-                                } else {
-                                    if (this.checked) {
-                                        if (!self.selectedRowKeys.includes(rowKey)) {
-                                            self.selectedRowKeys.push(rowKey);
-                                        }
-                                    } else {
-                                        const idx = self.selectedRowKeys.indexOf(rowKey);
-                                        if (idx > -1) {
-                                            self.selectedRowKeys.splice(idx, 1);
-                                        }
-                                    }
-                                }
-                                self._outputSelection();
-                                self._notifyCallbacks();
-                            });
+                            self.unselectedRowKeys.add(rowKey);
+                        }
+                    } else {
+                        if (isSelected) {
+                            self.selectedRowKeys.add(rowKey);
+                        } else {
+                            self.selectedRowKeys.delete(rowKey);
                         }
                     }
-                    observer.disconnect();
-                });
-                observer.observe(element, {
-                    attributes: true,
-                    attributeFilter: ['class', 'aria-label']
-                });
-                self._observers.push(observer);
-                return element;
+                }
+                pendingRowChanges.clear();
+                self._notifyCallbacks();
             };
-        }
 
-        _bindSelectAllEvent(checkbox) {
-            if (checkbox.dataset.selectAllBound) return;
-            checkbox.dataset.selectAllBound = 'true';
-            checkbox.addEventListener('click', () => {
-                if (checkbox.checked) {
-                    this.isSelectAll = true;
-                    this.unselectedRowKeys = [];
-                    this.selectedRowKeys = [];
-                } else {
-                    this.isSelectAll = false;
-                    this.selectedRowKeys = [];
-                    this.unselectedRowKeys = [];
+            const rowObserver = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') continue;
+                    const target = mutation.target;
+                    if (!target.classList || !target.classList.contains('ant-table-row')) continue;
+
+                    const rowKey = target.getAttribute('data-row-key');
+                    if (!rowKey) continue;
+
+                    const isSelected = target.classList.contains('ant-table-row-selected');
+                    pendingRowChanges.set(rowKey, isSelected);
                 }
-                this._outputSelection();
-                this._notifyCallbacks();
+
+                if (pendingRowChanges.size > 0) {
+                    if (rowDebounceTimer) clearTimeout(rowDebounceTimer);
+                    rowDebounceTimer = setTimeout(processRowChanges, 50);
+                }
             });
-        }
 
-        _outputSelection() {
-            if (this.isSelectAll) {
-                if (this.unselectedRowKeys.length === 0) {
+            const observeTarget = () => {
+                const container = document.querySelector('.home-content');
+                if (container) {
+                    rowObserver.observe(container, {
+                        subtree: true,
+                        attributes: true,
+                        attributeFilter: ['class']
+                    });
+                    self._observers.push(rowObserver);
+                    logger.log('行选中监听已启动，目标: .home-content');
                 } else {
+                    setTimeout(observeTarget, 200);
                 }
-            }
+            };
+            observeTarget();
         }
 
         _notifyCallbacks() {
@@ -664,24 +696,33 @@
                 observer.disconnect();
             });
             this._observers = [];
+            if (this._selectAllClickHandler) {
+                document.removeEventListener('click', this._selectAllClickHandler);
+                this._selectAllClickHandler = null;
+            }
             if (this._breadcrumbObserver) {
                 this._breadcrumbObserver.disconnect();
                 this._breadcrumbObserver = null;
             }
         }
 
-        _observeBreadcrumb() {
+        _observeBreadcrumb(retryCount = 0) {
+            const MAX_RETRIES = 50;
             const breadcrumb = document.querySelector('.home-breadcrumb');
             if (!breadcrumb) {
+                if (retryCount >= MAX_RETRIES) {
+                    logger.warn('面包屑元素不存在，已达到最大重试次数');
+                    return;
+                }
                 logger.log('面包屑元素不存在，延迟重试');
-                setTimeout(() => this._observeBreadcrumb(), 100);
+                setTimeout(() => this._observeBreadcrumb(retryCount + 1), 200);
                 return;
             }
 
             this._breadcrumbObserver = new MutationObserver(() => {
                 logger.log('检测到面包屑变化，清空所有选择');
-                this.selectedRowKeys = [];
-                this.unselectedRowKeys = [];
+                this.selectedRowKeys.clear();
+                this.unselectedRowKeys.clear();
                 this.isSelectAll = false;
                 this._notifyCallbacks();
             });
@@ -772,8 +813,7 @@
                     logger.log('全选但有取消的文件，取消数量:', selection.unselectedRowKeys.length);
                     this.selectedFiles = allFiles
                         .filter(file => {
-                            const fileIdStr = String(file.FileId);
-                            const isUnselected = selection.unselectedRowKeys.some(key => String(key) === fileIdStr);
+                            const isUnselected = selection.unselectedRowKeys.includes(String(file.FileId));
                             const isFile = file.Type !== CONSTANTS.FILE_TYPE_FOLDER;
                             return !isUnselected && isFile;
                         })
@@ -832,6 +872,10 @@
 
         isUpdating() {
             return this._isUpdating;
+        }
+
+        refresh() {
+            return this._updateSelectedFiles();
         }
 
         getSelectedFiles() {
@@ -981,7 +1025,7 @@
             checkAndCreate();
 
             if (!this.actionButton) {
-                this._observer = new MutationObserver((mutations) => {
+                this._observer = new MutationObserver(() => {
                     checkAndCreate();
                 });
                 this._observer.observe(document.body, {
@@ -1007,7 +1051,7 @@
             }
 
             const firstButton = container.querySelector('button');
-            const buttonClass = firstButton ? firstButton.className : 'ant-btn css-1doczi2 css-var-_r_0_ ant-btn-primary ant-btn-color-primary ant-btn-variant-solid ant-dropdown-trigger mfy-button upload-button mfy-button';
+            const buttonClass = firstButton ? firstButton.className : 'sfr-btn-primary';
 
             const btnContainer = document.createElement('div');
             btnContainer.className = 'sfr-button-container';
@@ -1046,7 +1090,7 @@
                 return;
             }
             
-            this.selectedFilesManager._updateSelectedFiles().then(() => {
+            this.selectedFilesManager.refresh().then(() => {
                 const selectedFiles = this.selectedFilesManager.getSelectedFiles();
                 this._showFileListModal(selectedFiles);
             });
@@ -1058,10 +1102,10 @@
             button.dataset.checked = defaultChecked.toString();
 
             const checkboxLabel = document.createElement('label');
-            checkboxLabel.className = 'ant-checkbox-wrapper css-var-_r_0_ ant-checkbox-css-var css-1doczi2 sfr-checkbox-label';
+            checkboxLabel.className = 'ant-checkbox-wrapper sfr-checkbox-label';
 
             const checkboxSpan = document.createElement('span');
-            checkboxSpan.className = 'ant-checkbox ant-wave-target css-1doczi2 sfr-checkbox-span';
+            checkboxSpan.className = 'ant-checkbox ant-wave-target sfr-checkbox-span';
 
             const checkboxInput = document.createElement('input');
             checkboxInput.type = 'checkbox';
@@ -1081,19 +1125,6 @@
                 checkboxLabel.classList.add('ant-checkbox-wrapper-checked');
                 checkboxSpan.classList.add('ant-checkbox-checked');
             }
-
-            button.onmouseover = () => {
-                if (button.dataset.checked === 'false') {
-                    button.style.borderColor = CONSTANTS.PRIMARY_COLOR;
-                    button.style.color = CONSTANTS.PRIMARY_COLOR;
-                }
-            };
-            button.onmouseout = () => {
-                if (button.dataset.checked === 'false') {
-                    button.style.borderColor = CONSTANTS.BORDER_COLOR;
-                    button.style.color = CONSTANTS.TEXT_COLOR;
-                }
-            };
 
             button.onclick = () => {
                 const isChecked = button.dataset.checked === 'true';
@@ -1189,7 +1220,7 @@
                     }
                 });
 
-                fileItem.addEventListener('dragleave', (e) => {
+                fileItem.addEventListener('dragleave', () => {
                     if (draggedItem && draggedItem !== fileItem) {
                         fileItem.style.transform = '';
                     }
@@ -1218,7 +1249,7 @@
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.innerHTML = '×';
-                deleteBtn.className = 'sfr-file-delete-btn ant-btn css-dev-only-do-not-override-168k93g ant-btn-default ant-btn-color-default ant-btn-variant-outlined';
+                deleteBtn.className = 'sfr-file-delete-btn';
 
                 deleteBtn.onmousedown = (e) => {
                     e.stopPropagation();
@@ -1297,7 +1328,7 @@
 
             const nextBtn = document.createElement('button');
             nextBtn.textContent = '下一步';
-            nextBtn.className = 'ant-btn css-1doczi2 css-1oxmu1t css-var-_r_0_ ant-btn-primary ant-btn-color-primary ant-btn-variant-solid';
+            nextBtn.className = 'sfr-btn-primary';
             nextBtn.onclick = () => {
                 const orderedFiles = this._getOrderedFiles(fileList, files);
                 logger.log('排序后的文件列表:', orderedFiles);
@@ -1307,7 +1338,7 @@
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '取消';
-            closeBtn.className = 'ant-btn css-1doczi2 css-var-_r_0_ ant-btn-default ant-btn-color-default ant-btn-variant-outlined';
+            closeBtn.className = 'sfr-btn';
             closeBtn.onclick = () => this._sortModal.close();
 
             const footerButtonsContainer = document.createElement('div');
@@ -1421,7 +1452,7 @@
 
             const confirmBtn = document.createElement('button');
             confirmBtn.textContent = '确定';
-            confirmBtn.className = 'ant-btn css-1doczi2 css-1oxmu1t css-var-_r_0_ ant-btn-primary ant-btn-color-primary ant-btn-variant-solid';
+            confirmBtn.className = 'sfr-btn-primary';
             let hasExecuted = false;
             confirmBtn.onclick = async () => {
                 if (hasExecuted) {
@@ -1507,7 +1538,7 @@
 
             const prevBtn = document.createElement('button');
             prevBtn.textContent = '上一步';
-            prevBtn.className = 'ant-btn css-1doczi2 css-var-_r_0_ ant-btn-default ant-btn-color-default ant-btn-variant-outlined';
+            prevBtn.className = 'sfr-btn';
             prevBtn.onclick = () => {
                 this._renameModal.close();
                 this._sortModal.show();
@@ -1593,7 +1624,7 @@
                     fileItems.forEach(item => {
                         const originalIndex = parseInt(item.dataset.originalIndex);
                         const originalFileName = item.dataset.originalFileName;
-                        const ext = originalFileName.includes('.') ? '.' + originalFileName.split('.').pop() : '';
+                        const { ext } = parseFileName(originalFileName);
                         const sequenceNumber = startNumber + originalIndex;
                         let numberPart;
                         if (paddingLength > 0) {
@@ -1642,8 +1673,7 @@
                     const fileItems = fileList.querySelectorAll('.sfr-file-item-rename');
                     fileItems.forEach(item => {
                         const originalFileName = item.dataset.originalFileName;
-                        const ext = originalFileName.includes('.') ? '.' + originalFileName.split('.').pop() : '';
-                        const nameWithoutExt = originalFileName.includes('.') ? originalFileName.substring(0, originalFileName.lastIndexOf('.')) : originalFileName;
+                        const { name: nameWithoutExt, ext } = parseFileName(originalFileName);
                         const newName = prefix + nameWithoutExt + suffix + ext;
                         const newNameElement = item.querySelector('.sfr-file-name-new');
                         if (newNameElement) {
@@ -1741,11 +1771,20 @@
                 inputsContainer.appendChild(regexInput);
                 inputsContainer.appendChild(replaceInput);
 
+                const regexErrorHint = document.createElement('span');
+                regexErrorHint.style.cssText = 'color: #ff4d4f; font-size: 12px; display: none; margin-top: 4px;';
+                inputsContainer.appendChild(regexErrorHint);
+
                 configArea.appendChild(inputsContainer);
 
                 const updateFileNames = () => {
                     const regexPattern = regexInput.value || '';
                     const replaceText = replaceInput.value || '';
+
+                    // 清除之前的错误状态
+                    regexInput.style.borderColor = '';
+                    regexErrorHint.style.display = 'none';
+                    regexErrorHint.textContent = '';
 
                     const fileItems = fileList.querySelectorAll('.sfr-file-item-rename');
                     fileItems.forEach(item => {
@@ -1756,8 +1795,11 @@
                             try {
                                 const regex = new RegExp(regexPattern, 'g');
                                 newName = originalFileName.replace(regex, replaceText);
-                            } catch (e) {
+                            } catch {
                                 newName = originalFileName;
+                                regexInput.style.borderColor = '#ff4d4f';
+                                regexErrorHint.textContent = '正则表达式语法错误';
+                                regexErrorHint.style.display = 'inline';
                             }
                         }
 
@@ -1795,8 +1837,7 @@
                         let newName = originalFileName;
 
                         if (newExt) {
-                            const ext = originalFileName.includes('.') ? '.' + originalFileName.split('.').pop() : '';
-                            const nameWithoutExt = originalFileName.includes('.') ? originalFileName.substring(0, originalFileName.lastIndexOf('.')) : originalFileName;
+                            const { name: nameWithoutExt } = parseFileName(originalFileName);
                             let finalExt = newExt;
                             if (!finalExt.startsWith('.')) {
                                 finalExt = '.' + finalExt;
@@ -1849,7 +1890,7 @@
 
         _updateRenameStats(statsContainer, totalFiles, successCount, failCount) {
             const skippedCount = totalFiles - successCount - failCount;
-            
+
             const totalCountSpan = document.createElement('span');
             totalCountSpan.className = 'sfr-stats-item';
             totalCountSpan.innerHTML = `共 <strong>${totalFiles}</strong> 个文件`;
@@ -1862,20 +1903,16 @@
             failSpan.className = 'sfr-stats-item';
             failSpan.innerHTML = `失败 <strong style="color: #ff4d4f;">${failCount}</strong>`;
 
+            statsContainer.innerHTML = '';
+            statsContainer.appendChild(totalCountSpan);
+            statsContainer.appendChild(successSpan);
+            statsContainer.appendChild(failSpan);
+
             if (skippedCount > 0) {
                 const skippedSpan = document.createElement('span');
                 skippedSpan.className = 'sfr-stats-item';
                 skippedSpan.innerHTML = `跳过 <strong>${skippedCount}</strong>`;
-                statsContainer.innerHTML = '';
-                statsContainer.appendChild(totalCountSpan);
-                statsContainer.appendChild(successSpan);
-                statsContainer.appendChild(failSpan);
                 statsContainer.appendChild(skippedSpan);
-            } else {
-                statsContainer.innerHTML = '';
-                statsContainer.appendChild(totalCountSpan);
-                statsContainer.appendChild(successSpan);
-                statsContainer.appendChild(failSpan);
             }
         }
 
@@ -1884,7 +1921,7 @@
             const orderedFiles = [];
             const fileMap = new Map(originalFiles.map(f => [String(f.FileId), f]));
 
-            fileItems.forEach((item, index) => {
+            fileItems.forEach((item) => {
                 const fileId = item.dataset.fileId;
                 const isVisible = item.style.display !== 'none';
                 if (isVisible) {
@@ -1901,7 +1938,7 @@
         }
 
         _formatFileSize(bytes) {
-            if (bytes === 0) return '0 B';
+            if (!bytes || bytes <= 0) return '0 B';
             const k = 1024;
             const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
