@@ -14,9 +14,9 @@
 // @match        *://*.123pan.cn/*
 // @match        *://*.123684.com/*
 // @match        *://*.123865.com/*
-// @icon         // @icon         https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAETtahp8FnWo7fqBhJAv2tAUhxcgDrc2QACQSEAAgYIiVcf7ydSVVOwYDsE.png
+// @icon         https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAETtahp8FnWo7fqBhJAv2tAUhxcgDrc2QACQSEAAgYIiVcf7ydSVVOwYDsE.png
 // @grant        none
-// @tag          123 123云盘 云盘 批量重命名助手 123FastRename
+// @tag          123云盘 云盘 批量重命名助手 CloudDriveFastRename
 // ==/UserScript==
 
 (function () {
