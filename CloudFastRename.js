@@ -3,7 +3,7 @@
 // @name:en      CloudDriveFastRename
 // @namespace    meguoe
 // @version      1.0.0
-// @description  云盘批量重命名助手，支持123云盘、夸克网盘，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、过滤视频/图片等功能
+// @description  云盘批量重命名助手，支持123云盘、夸克网盘、光鸭云盘，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、过滤视频/图片等功能
 // @author       meguoe@163.com
 // @license      Apache-2.0
 // @match        *://*.123pan.com/*
@@ -19,7 +19,7 @@
 // @grant        GM_xmlhttpRequest
 // @connect      *
 // @run-at       document-idle
-// @tag          123 夸克 123云盘 夸克网盘 批量重命名助手 CloudDriveFastRename
+// @tag          123 夸克 光鸭 123云盘 夸克网盘 光鸭网盘 批量重命名助手 CloudDriveFastRename
 // @noframes
 // ==/UserScript==
 
@@ -29,12 +29,13 @@
   // ========================
   //  日志工具
   // ========================
+  const DEBUG = false;
   const LOG_TAG = '%c[CloudDriveFastRename]%c';
   const LOG_STYLE = 'color:#e74c3c;font-weight:bold';
   const LOG_SUB_STYLE = 'color:#3498db';
 
   function log(...args) {
-    console.log(LOG_TAG, LOG_STYLE, '', LOG_SUB_STYLE, ...args);
+    if (DEBUG) console.log(LOG_TAG, LOG_STYLE, '', LOG_SUB_STYLE, ...args);
   }
 
   // ========================
