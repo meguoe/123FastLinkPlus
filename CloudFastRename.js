@@ -2,7 +2,7 @@
 // @name         云盘批量重命名助手 | 支持123云盘、夸克网盘、光鸭云盘
 // @name:en      CloudDriveFastRename
 // @namespace    meguoe
-// @version      1.0.2
+// @version      1.0.3
 // @description  云盘批量重命名助手，支持123云盘、夸克网盘、光鸭云盘，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、过滤视频/图片等功能
 // @author       meguoe@163.com
 // @license      Apache-2.0
@@ -617,7 +617,7 @@
         async getFileList(parentFileId) {
           let InfoList = [];
           log(`[123API] 开始获取文件列表，parentFileId: ${parentFileId}`);
-          const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 3000, center: true });
+          const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
           try {
             const info = await this.getOnePageFileList(parentFileId, 1);
             InfoList.push(...info.data.InfoList);
@@ -1018,7 +1018,6 @@
         log(`[QuarkAPI] 请求第 ${page} 页...`);
         const data = await this._getFileList(pdirFid, page, size);
         const list = (data?.data?.list ?? [])
-          .filter(item => item.file_type === 1)
           .map(({ fid, file_name, file_type, category }) =>
             ({ fid, file_name, file_type, category })
           );
@@ -1099,7 +1098,7 @@
 
       this._cachePromise = (async () => {
         const fetchDirId = dirId;
-        const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 3000, center: true });
+        const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
         try {
           log(`[QuarkCache] 开始获取全量文件列表，目录: ${fetchDirId}`);
           const files = await this._getAllFiles(fetchDirId);
@@ -1141,7 +1140,7 @@
               log(`[QuarkCheckbox] 全选触发`);
               await this._ensureFileCache();
               this.selectedFiles = new Map(
-                [...this.fileCache].map(([k, v]) => [k, this._normalizeFile(v)])
+                [...this.fileCache].filter(([_, v]) => v.file_type === 1).map(([k, v]) => [k, this._normalizeFile(v)])
               );
               log(`[QuarkCheckbox] 全选完成，共 ${this.selectedFiles.size} 个文件`);
             } else {
@@ -1170,14 +1169,22 @@
             if (e.target.checked) {
               const cached = this.fileCache.get(rowKey);
               if (cached) {
-                this.selectedFiles.set(rowKey, this._normalizeFile(cached));
-                log(`[QuarkCheckbox] 文件选中（缓存）- fid: ${rowKey}, 文件名: ${cached.file_name}，当前共 ${this.selectedFiles.size} 个`);
+                if (cached.file_type === 1) {
+                  this.selectedFiles.set(rowKey, this._normalizeFile(cached));
+                  log(`[QuarkCheckbox] 文件选中 - fid: ${rowKey}, 文件名: ${cached.file_name}，当前共 ${this.selectedFiles.size} 个`);
+                } else {
+                  log(`[QuarkCheckbox] 跳过文件夹 - fid: ${rowKey}, 文件名: ${cached.file_name}`);
+                }
               } else {
-                log(`[QuarkCheckbox] 文件选中（缓存未命中）- fid: ${rowKey}，触发全量获取`);
+                log(`[QuarkCheckbox] 缓存未命中 - fid: ${rowKey}，触发全量获取`);
                 await this._ensureFileCache();
-                const info = this.fileCache.get(rowKey) || { fid: rowKey, file_name: fileName, file_type: 1 };
-                this.selectedFiles.set(rowKey, this._normalizeFile(info));
-                log(`[QuarkCheckbox] 文件选中 - fid: ${rowKey}, 文件名: ${info.file_name}，当前共 ${this.selectedFiles.size} 个`);
+                const info = this.fileCache.get(rowKey);
+                if (info && info.file_type === 1) {
+                  this.selectedFiles.set(rowKey, this._normalizeFile(info));
+                  log(`[QuarkCheckbox] 文件选中 - fid: ${rowKey}, 文件名: ${info.file_name}，当前共 ${this.selectedFiles.size} 个`);
+                } else {
+                  log(`[QuarkCheckbox] 跳过非文件项 - fid: ${rowKey}, 文件名: ${fileName}`);
+                }
               }
             } else {
               this.selectedFiles.delete(rowKey);
@@ -1427,13 +1434,12 @@
         const data = await this._getFileList(parentId, size, page);
         const rawList = data?.data?.list ?? [];
         const list = rawList
-          .filter(item => item.resType === 1)
           .map(({ fileId, fileName, fileType, resType }) =>
             ({ fid: fileId, file_name: fileName, file_type: fileType, resType })
           );
         const total = data?.data?.total ?? 0;
         rawFetched += rawList.length;
-        log(`[GuangyaAPI] 第 ${page} 页返回: 本页 ${rawList.length} 条（文件 ${list.length}），累计原始 ${rawFetched}/${total} 条`);
+        log(`[GuangyaAPI] 第 ${page} 页返回: 本页 ${rawList.length} 条，累计 ${rawFetched}/${total} 条`);
         allList = allList.concat(list);
         if (rawList.length === 0 || rawFetched >= total) {
           log(`[GuangyaAPI] 翻页完成，共 ${allList.length} 个文件`);
@@ -1465,7 +1471,7 @@
 
       this._cachePromise = (async () => {
         const fetchDirId = dirId;
-        const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 3000, center: true });
+        const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
         try {
           log(`[GuangyaCache] 开始获取全量文件列表，目录: ${fetchDirId}`);
           const files = await this._getAllFiles(fetchDirId);
@@ -1506,7 +1512,7 @@
               log(`[GuangyaCheckbox] 全选触发`);
               await this._ensureFileCache();
               this.selectedFiles = new Map(
-                [...this.fileCache].map(([k, v]) => [k, this._normalizeFile(v)])
+                [...this.fileCache].filter(([_, v]) => v.resType === 1).map(([k, v]) => [k, this._normalizeFile(v)])
               );
               log(`[GuangyaCheckbox] 全选完成，共 ${this.selectedFiles.size} 个文件`);
             } else {
@@ -1536,14 +1542,22 @@
             if (e.target.checked) {
               const cached = this.fileCache.get(rowKey);
               if (cached) {
-                this.selectedFiles.set(rowKey, this._normalizeFile(cached));
-                log(`[GuangyaCheckbox] 文件选中（缓存）- fid: ${rowKey}, 文件名: ${cached.file_name}，当前共 ${this.selectedFiles.size} 个`);
+                if (cached.resType === 1) {
+                  this.selectedFiles.set(rowKey, this._normalizeFile(cached));
+                  log(`[GuangyaCheckbox] 文件选中 - fid: ${rowKey}, 文件名: ${cached.file_name}，当前共 ${this.selectedFiles.size} 个`);
+                } else {
+                  log(`[GuangyaCheckbox] 跳过文件夹 - fid: ${rowKey}, 文件名: ${cached.file_name}`);
+                }
               } else {
-                log(`[GuangyaCheckbox] 文件选中（缓存未命中）- fid: ${rowKey}，触发全量获取`);
+                log(`[GuangyaCheckbox] 缓存未命中 - fid: ${rowKey}，触发全量获取`);
                 await this._ensureFileCache();
-                const info = this.fileCache.get(rowKey) || { fid: rowKey, file_name: fileName, file_type: 1, resType: 1 };
-                this.selectedFiles.set(rowKey, this._normalizeFile(info));
-                log(`[GuangyaCheckbox] 文件选中 - fid: ${rowKey}, 文件名: ${info.file_name}，当前共 ${this.selectedFiles.size} 个`);
+                const info = this.fileCache.get(rowKey);
+                if (info && info.resType === 1) {
+                  this.selectedFiles.set(rowKey, this._normalizeFile(info));
+                  log(`[GuangyaCheckbox] 文件选中 - fid: ${rowKey}, 文件名: ${info.file_name}，当前共 ${this.selectedFiles.size} 个`);
+                } else {
+                  log(`[GuangyaCheckbox] 跳过非文件项 - fid: ${rowKey}, 文件名: ${fileName}`);
+                }
               }
             } else {
               this.selectedFiles.delete(rowKey);
