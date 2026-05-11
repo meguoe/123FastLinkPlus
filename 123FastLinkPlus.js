@@ -1272,7 +1272,11 @@
       };
       
       dialog.querySelector("#fastlink-loading-open-123pan-btn").onclick = () => {
-        window.open(`https://www.123pan.com/?homeFilePath=${utils._dialogCache.currentId}`, "_blank");
+        if (utils._dialogCache.currentId === 0) {
+          window.open(`https://yun.123pan.cn`, "_blank");
+          return;
+        }
+        window.open(`https://yun.123pan.cn/?homeFilePath=${utils._dialogCache.currentId}`, "_blank");
       };
 
       // 缓存对话框
