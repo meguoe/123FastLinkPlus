@@ -2,7 +2,7 @@
 // @name         云盘批量重命名助手 | 支持123云盘、夸克网盘、光鸭云盘
 // @name:en      CloudDriveFastRename
 // @namespace    meguoe
-// @version      1.0.3
+// @version      1.0.4
 // @description  云盘批量重命名助手，支持123云盘、夸克网盘、光鸭云盘，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、过滤视频/图片等功能
 // @author       meguoe@163.com
 // @license      Apache-2.0
@@ -17,6 +17,8 @@
 // @icon         https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAETtahp8FnWo7fqBhJAv2tAUhxcgDrc2QACQSEAAgYIiVcf7ydSVVOwYDsE.png
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @connect      *
 // @run-at       document-idle
 // @tag          123 夸克 光鸭 云盘 网盘 123云盘 夸克网盘 光鸭云盘 批量重命名助手 CloudDriveFastRename
@@ -444,18 +446,38 @@
   // ========================
   //  共享 UI 辅助函数
   // ========================
-  function createToggleButton(text, defaultActive = false, onChange = null) {
+
+  // 持久化存储键名
+  const STORAGE_KEY_SORT_DESC = 'cfr_sort_desc';
+  const STORAGE_KEY_FILTER_VIDEO = 'cfr_filter_video';
+  const STORAGE_KEY_FILTER_IMAGE = 'cfr_filter_image';
+  const STORAGE_KEY_FILTER_AUDIO = 'cfr_filter_audio';
+
+  function createToggleButton(text, defaultActive = false, onChange = null, storageKey = null) {
+    // 如果指定了存储键，从 GM_getValue 读取初始状态
+    let initialActive = defaultActive;
+    if (storageKey) {
+      try {
+        const saved = GM_getValue(storageKey, null);
+        if (saved !== null) initialActive = saved === 'true';
+      } catch (e) { /* 忽略存储错误 */ }
+    }
+
     const button = document.createElement('button');
     button.className = 'cfr-toggle-button';
-    button.dataset.active = String(defaultActive);
+    button.dataset.active = String(initialActive);
     button.textContent = text;
-    if (defaultActive) button.classList.add('cfr-toggle-button-active');
+    if (initialActive) button.classList.add('cfr-toggle-button-active');
 
     button.onclick = () => {
       const isActive = button.dataset.active === 'true';
       const newState = !isActive;
       button.dataset.active = String(newState);
       button.classList.toggle('cfr-toggle-button-active', newState);
+      // 持久化到 GM_setValue
+      if (storageKey) {
+        try { GM_setValue(storageKey, String(newState)); } catch (e) { /* 忽略存储错误 */ }
+      }
       if (onChange) onChange(newState);
     };
     return button;
@@ -534,9 +556,13 @@
       this.apiClient = null;
       this.selector = null;
       this.selectedFilesManager = null;
+      // 文件缓存相关
+      this.fileCache = new Map(); // fid -> fileInfo
+      this.cachedParentFileId = null;
+      this._cachePromise = null;
     }
 
-    /** 获取当前目录的父级文件 ID */
+    /** 获取当前目录的父级文件 ID（根目录返回 '0'） */
     async _getParentFileId() {
       try {
         const homeFilePath = JSON.parse(sessionStorage['filePath'])['homeFilePath'];
@@ -546,6 +572,69 @@
         log('[Platform123] 获取父级文件ID失败:', e);
         return '0';
       }
+    }
+
+    /** 确保文件缓存可用（Promise 锁机制，避免竞态，支持自动重试）
+     *  @param {object} [options] - 配置项
+     *  @param {boolean} [options.silent=false] - 静默模式，不显示 toast 提示
+     *  @param {number} [options.maxRetries=2] - 最大重试次数（默认 2 次，共 3 次尝试）
+     */
+    async _ensureFileCache({ silent = false, maxRetries = 2 } = {}) {
+      const parentFileId = await this._getParentFileId();
+
+      if (this.cachedParentFileId === parentFileId && this.fileCache.size > 0) {
+        log(`[123Cache] 缓存命中，目录: ${parentFileId}，共 ${this.fileCache.size} 个文件`);
+        return;
+      }
+
+      if (this.cachedParentFileId !== parentFileId) {
+        log(`[123Cache] 目录变更 ${this.cachedParentFileId} -> ${parentFileId}，清空旧缓存`);
+        this.fileCache = new Map();
+        this.cachedParentFileId = parentFileId;
+      }
+
+      if (this._cachePromise) return this._cachePromise;
+
+      this._cachePromise = (async () => {
+        const fetchParentId = parentFileId;
+        const dismissToast = silent ? () => {} : showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
+        let lastError = null;
+
+        try {
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            if (attempt > 0) {
+              const delay = attempt * 1000; // 1s, 2s 递增延迟
+              log(`[123Cache] 第 ${attempt} 次重试，等待 ${delay}ms...`);
+              await new Promise(r => setTimeout(r, delay));
+            }
+
+            try {
+              log(`[123Cache] 开始获取全量文件列表，目录: ${fetchParentId}${silent ? '（静默预获取）' : ''}${attempt > 0 ? `，第 ${attempt + 1} 次尝试` : ''}`);
+              const fileList = await this.apiClient.getFileList(fetchParentId);
+              const files = fileList.data.InfoList;
+              if (this.cachedParentFileId === fetchParentId) {
+                this.fileCache = new Map(files.map(f => [String(f.FileId), f]));
+                log(`[123Cache] 全量缓存完成，共 ${this.fileCache.size} 个文件`);
+              } else {
+                log(`[123Cache] 目录已变更为 ${this.cachedParentFileId}，丢弃旧目录 ${fetchParentId} 的缓存数据`);
+              }
+              return; // 成功，退出重试循环
+            } catch (err) {
+              lastError = err;
+              log(`[123Cache] 获取文件列表失败${attempt < maxRetries ? '，准备重试' : ''}:`, err);
+            }
+          }
+
+          // 所有重试都失败
+          log(`[123Cache] 获取文件列表失败，已重试 ${maxRetries} 次:`, lastError);
+        } finally {
+          dismissToast();
+        }
+      })();
+
+      return this._cachePromise.finally(() => {
+        this._cachePromise = null;
+      });
     }
 
     /** 获取额外列信息（文件类型） */
@@ -617,25 +706,20 @@
         async getFileList(parentFileId) {
           let InfoList = [];
           log(`[123API] 开始获取文件列表，parentFileId: ${parentFileId}`);
-          const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
-          try {
-            const info = await this.getOnePageFileList(parentFileId, 1);
-            InfoList.push(...info.data.InfoList);
-            const total = info.total;
-            log(`[123API] 第1页返回: ${info.data.InfoList.length} 条，总计: ${total} 条`);
-            if (total > 100) {
-              const times = Math.ceil(total / 100);
-              for (let i = 2; i < times + 1; i++) {
-                const info = await this.getOnePageFileList(parentFileId, i);
-                InfoList.push(...info.data.InfoList);
-                log(`[123API] 第${i}页返回: ${info.data.InfoList.length} 条，累计: ${InfoList.length}/${total} 条`);
-              }
+          const info = await this.getOnePageFileList(parentFileId, 1);
+          InfoList.push(...info.data.InfoList);
+          const total = info.total;
+          log(`[123API] 第1页返回: ${info.data.InfoList.length} 条，总计: ${total} 条`);
+          if (total > 100) {
+            const times = Math.ceil(total / 100);
+            for (let i = 2; i < times + 1; i++) {
+              const info = await this.getOnePageFileList(parentFileId, i);
+              InfoList.push(...info.data.InfoList);
+              log(`[123API] 第${i}页返回: ${info.data.InfoList.length} 条，累计: ${InfoList.length}/${total} 条`);
             }
-            log(`[123API] 文件列表获取完成，共 ${InfoList.length} 条`);
-            return { data: { InfoList }, total };
-          } finally {
-            dismissToast();
           }
+          log(`[123API] 文件列表获取完成，共 ${InfoList.length} 条`);
+          return { data: { InfoList }, total };
         }
 
         async getFileInfo(idList) {
@@ -777,14 +861,13 @@
       }();
 
       this.selectedFilesManager = new class SelectedFilesManager {
-        constructor(apiClient, selector) {
+        constructor(apiClient, selector, platform) {
           this.apiClient = apiClient;
           this.selector = selector;
+          this.platform = platform; // Platform123 实例，用于访问缓存
           this.selectedFiles = [];
           this._callbacks = [];
           this._debounceTimer = null;
-          this._cachedFileList = null;
-          this._cachedParentFileId = null;
           this._isUpdating = false;
         }
 
@@ -803,20 +886,16 @@
           log(`[123Files] 选择状态变化:`, selection);
           this.selectedFiles = [];
 
+          // 确保缓存已就绪（预获取后通常直接命中）
+          await this.platform._ensureFileCache({ silent: true });
+          const parentFileId = await this.platform._getParentFileId();
+          log(`[123Files] 父级目录ID: ${parentFileId}`);
+
           if (selection.isSelectAll) {
             log('[123Files] 全选模式');
-            const parentFileId = await this._getParentFileId();
-            log(`[123Files] 父级目录ID: ${parentFileId}`);
-            let allFiles;
-            if (this._cachedFileList && this._cachedParentFileId === parentFileId) {
-              allFiles = this._cachedFileList;
-              log('[123Files] 使用缓存文件列表');
-            } else {
-              const fileList = await this.apiClient.getFileList(parentFileId);
-              allFiles = fileList.data.InfoList;
-              this._cachedFileList = allFiles;
-              this._cachedParentFileId = parentFileId;
-            }
+            // 使用 Platform123 的缓存
+            const allFiles = [...this.platform.fileCache.values()];
+            log(`[123Files] 从缓存获取 ${allFiles.length} 个文件`);
 
             if (selection.unselectedRowKeys.length === 0) {
               this.selectedFiles = allFiles
@@ -844,20 +923,15 @@
             log('[123Files] 非全选模式');
             const fileIds = selection.selectedRowKeys;
             log(`[123Files] 选中文件ID:`, fileIds);
-            if (fileIds.length > 0) {
-              try {
-                const fileInfoList = await this.apiClient.getFileInfo(fileIds);
-                this.selectedFiles = fileInfoList.data.InfoList
-                  .filter(file => file.Type !== 1)
-                  .map(file => ({
-                    id: String(file.FileId),
-                    name: file.FileName,
-                    category: file.Category || '0',
-                  }));
-              } catch (e) {
-                log('[123Files] 获取文件信息失败:', e);
-              }
-            }
+            // 从 Platform123 缓存中获取文件信息
+            const allFiles = [...this.platform.fileCache.values()];
+            this.selectedFiles = allFiles
+              .filter(file => fileIds.includes(String(file.FileId)) && file.Type !== 1)
+              .map(file => ({
+                id: String(file.FileId),
+                name: file.FileName,
+                category: file.Category || '0',
+              }));
           }
 
           log(`[123Files] 最终选中文件数: ${this.selectedFiles.length}`);
@@ -866,24 +940,13 @@
           return this.selectedFiles;
         }
 
-        async _getParentFileId() {
-          try {
-            const homeFilePath = JSON.parse(sessionStorage['filePath'])['homeFilePath'];
-            const parentFileId = (homeFilePath[homeFilePath.length - 1] || 0);
-            return parentFileId.toString();
-          } catch (e) {
-            log('[123Files] 获取父级文件ID失败:', e);
-            return '0';
-          }
-        }
-
         _notifyCallbacks() { this._callbacks.forEach(cb => cb()); }
         onFilesChange(cb) { this._callbacks.push(cb); }
         isUpdating() { return this._isUpdating; }
         refresh() { return this._updateSelectedFiles(); }
         getSelectedFiles() { return [...this.selectedFiles]; }
         hasSelectedFiles() { return this.selectedFiles.length > 0; }
-      }(this.apiClient, this.selector);
+      }(this.apiClient, this.selector, this);
 
       this.selector.init();
       this.selectedFilesManager.init();
@@ -955,15 +1018,41 @@
 
     /** 初始化完成后的额外设置（MutationObserver 等） */
     setupObserver(onChange) {
-      // 123 云盘的选择机制已内置 MutationObserver，此处无需额外操作
+      // 初始化时立即预获取当前目录的文件缓存
+      this._ensureFileCache({ silent: true });
+
+      // 监听目录变化，预获取新目录缓存
+      let lastParentFileId = null;
+      const checkDirChange = async () => {
+        const currentParentId = await this._getParentFileId();
+        if (lastParentFileId === null) {
+          lastParentFileId = currentParentId;
+          return;
+        }
+        if (currentParentId !== lastParentFileId) {
+          log(`[123Init] 目录变更 ${lastParentFileId} -> ${currentParentId}，预获取新缓存`);
+          lastParentFileId = currentParentId;
+          // 清空旧缓存，触发新目录的预获取
+          this.fileCache = new Map();
+          this.cachedParentFileId = null;
+          this._ensureFileCache({ silent: true });
+        }
+      };
+
+      // 使用 MutationObserver 检测目录变化（通过面包屑或文件列表变化）
+      const observer = new MutationObserver(debounce(() => {
+        checkDirChange();
+        if (onChange) onChange();
+      }, 200));
+      observer.observe(document.body, { childList: true, subtree: true });
+      log('[123Init] MutationObserver 已启动，支持目录变化预获取');
     }
 
     /** 清除文件缓存（重命名后调用） */
     clearCache() {
-      if (this.selectedFilesManager) {
-        this.selectedFilesManager._cachedFileList = null;
-        this.selectedFilesManager._cachedParentFileId = null;
-      }
+      this.fileCache = new Map();
+      this.cachedParentFileId = null;
+      log('[123Cache] 缓存已清空');
     }
   }
 
@@ -983,11 +1072,11 @@
       this.buttonId = 'cfr-quark-fast-rename-btn';
     }
 
-    /** 从 URL hash 解析当前目录 ID */
+    /** 从 URL hash 解析当前目录 ID（根目录返回 '0'） */
     _getCurrentDirId() {
       const hash = window.location.hash;
       const segments = hash.replace(/^#\/list\/all\/?/, '').split('/').filter(Boolean);
-      if (segments.length === 0) return null;
+      if (segments.length === 0) return '0';
       const last = segments[segments.length - 1];
       const dirId = last.split('-')[0];
       return dirId;
@@ -1076,10 +1165,13 @@
       });
     }
 
-    /** 确保文件缓存可用（Promise 锁机制，避免竞态） */
-    async _ensureFileCache() {
+    /** 确保文件缓存可用（Promise 锁机制，避免竞态，支持自动重试）
+     *  @param {object} [options] - 配置项
+     *  @param {boolean} [options.silent=false] - 静默模式，不显示 toast 提示
+     *  @param {number} [options.maxRetries=2] - 最大重试次数（默认 2 次，共 3 次尝试）
+     */
+    async _ensureFileCache({ silent = false, maxRetries = 2 } = {}) {
       const dirId = this._getCurrentDirId();
-      if (!dirId) return;
 
       if (this.cachedDirId === dirId && this.fileCache.size > 0) {
         log(`[QuarkCache] 缓存命中，目录: ${dirId}，共 ${this.fileCache.size} 个文件`);
@@ -1098,26 +1190,44 @@
 
       this._cachePromise = (async () => {
         const fetchDirId = dirId;
-        const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
+        const dismissToast = silent ? () => {} : showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
+        let lastError = null;
+
         try {
-          log(`[QuarkCache] 开始获取全量文件列表，目录: ${fetchDirId}`);
-          const files = await this._getAllFiles(fetchDirId);
-          // 写入前检查目录是否已变更，避免竞态污染
-          if (this.cachedDirId === fetchDirId) {
-            this.fileCache = new Map(files.map(f => [f.fid, f]));
-            log(`[QuarkCache] 全量缓存完成，共 ${this.fileCache.size} 个文件`);
-          } else {
-            log(`[QuarkCache] 目录已变更为 ${this.cachedDirId}，丢弃旧目录 ${fetchDirId} 的缓存数据`);
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            if (attempt > 0) {
+              const delay = attempt * 1000; // 1s, 2s 递增延迟
+              log(`[QuarkCache] 第 ${attempt} 次重试，等待 ${delay}ms...`);
+              await new Promise(r => setTimeout(r, delay));
+            }
+
+            try {
+              log(`[QuarkCache] 开始获取全量文件列表，目录: ${fetchDirId}${silent ? '（静默预获取）' : ''}${attempt > 0 ? `，第 ${attempt + 1} 次尝试` : ''}`);
+              const files = await this._getAllFiles(fetchDirId);
+              // 写入前检查目录是否已变更，避免竞态污染
+              if (this.cachedDirId === fetchDirId) {
+                this.fileCache = new Map(files.map(f => [f.fid, f]));
+                log(`[QuarkCache] 全量缓存完成，共 ${this.fileCache.size} 个文件`);
+              } else {
+                log(`[QuarkCache] 目录已变更为 ${this.cachedDirId}，丢弃旧目录 ${fetchDirId} 的缓存数据`);
+              }
+              return; // 成功，退出重试循环
+            } catch (err) {
+              lastError = err;
+              log(`[QuarkCache] 获取文件列表失败${attempt < maxRetries ? '，准备重试' : ''}:`, err);
+            }
           }
-        } catch (err) {
-          log(`[QuarkCache] 获取文件列表失败:`, err);
+
+          // 所有重试都失败
+          log(`[QuarkCache] 获取文件列表失败，已重试 ${maxRetries} 次:`, lastError);
         } finally {
           dismissToast();
-          this._cachePromise = null;
         }
       })();
 
-      return this._cachePromise;
+      return this._cachePromise.finally(() => {
+        this._cachePromise = null;
+      });
     }
 
     /** 初始化文件选择机制 */
@@ -1261,7 +1371,21 @@
 
     /** 初始化完成后的额外设置（MutationObserver 等） */
     setupObserver(onChange) {
+      // 初始化时立即预获取当前目录的文件缓存
+      this._ensureFileCache({ silent: true });
+
+      // 监听目录变化，预获取新目录缓存
+      let lastDirId = this._getCurrentDirId();
       const debouncedBind = debounce(() => {
+        // 检测目录变化
+        const currentDirId = this._getCurrentDirId();
+        if (currentDirId !== lastDirId) {
+          log(`[QuarkInit] 目录变更 ${lastDirId} -> ${currentDirId}，清空选中并预获取新缓存`);
+          this.selectedFiles = new Map();
+          lastDirId = currentDirId;
+          // 静默预获取新目录的文件缓存
+          this._ensureFileCache({ silent: true });
+        }
         this._bindCheckboxEvents();
         if (onChange) onChange();
       }, 300);
@@ -1270,7 +1394,7 @@
         debouncedBind();
       });
       this._observer.observe(document.body, { childList: true, subtree: true });
-      log('[QuarkInit] MutationObserver 已启动');
+      log('[QuarkInit] MutationObserver 已启动，支持目录变化预获取');
     }
 
     /** 清除文件缓存（重命名后调用） */
@@ -1296,17 +1420,31 @@
       this.categoryMap = { 1: '图片', 2: '视频', 3: '音频' };
       this.selectedFiles = new Map();
       this.fileCache = new Map();
+      this._fileNameToFidMap = new Map(); // 文件名 -> fid 索引
       this.cachedDirId = null;
       this._cachePromise = null;
       this._isProcessingSelection = false;
       this._onSelectionChange = null;
     }
 
+    /** 通过文件名查找 fid */
+    _findFidByFileName(fileName) {
+      return this._fileNameToFidMap.get(fileName);
+    }
+
+    /** 更新文件名索引 */
+    _updateFileNameIndex() {
+      this._fileNameToFidMap.clear();
+      for (const [fid, info] of this.fileCache) {
+        this._fileNameToFidMap.set(info.file_name, fid);
+      }
+    }
+
     /** 从 URL hash 解析当前目录 ID */
     _getCurrentDirId() {
       const hash = window.location.hash;
       const segments = hash.replace(/^#\/home\/all\/?/, '').split('/').filter(Boolean);
-      if (segments.length === 0) return null;
+      if (segments.length === 0) return '';
       const last = segments[segments.length - 1];
       const dirId = last.split('-')[0];
       return dirId;
@@ -1386,7 +1524,7 @@
     }
 
     /** 获取单页文件列表 */
-    _getFileList(parentId, pageSize = 1000, page = 1) {
+    _getFileList(parentId, pageSize = 1000, page = 0) {
       return new Promise((resolve, reject) => {
         const token = this._getAuthToken();
         if (!token) {
@@ -1396,6 +1534,7 @@
 
         const url = 'https://api.guangyapan.com/nd.bizuserres.s/v1/file/get_file_list';
         const body = JSON.stringify({
+          page,
           parentId,
           pageSize,
           orderBy: 1,
@@ -1425,7 +1564,7 @@
 
     /** 获取文件列表（自动翻页） */
     async _getAllFiles(parentId, size = 1000) {
-      let page = 1;
+      let page = 0;
       let allList = [];
       let rawFetched = 0;
       log(`[GuangyaAPI] 开始获取文件列表，parentId: ${parentId}`);
@@ -1450,10 +1589,13 @@
       return allList;
     }
 
-    /** 确保文件缓存可用（Promise 锁机制，避免竞态） */
-    async _ensureFileCache() {
+    /** 确保文件缓存可用（Promise 锁机制，避免竞态，支持自动重试）
+     *  @param {object} [options] - 配置项
+     *  @param {boolean} [options.silent=false] - 静默模式，不显示 toast 提示
+     *  @param {number} [options.maxRetries=2] - 最大重试次数（默认 2 次，共 3 次尝试）
+     */
+    async _ensureFileCache({ silent = false, maxRetries = 2 } = {}) {
       const dirId = this._getCurrentDirId();
-      if (!dirId) return;
 
       if (this.cachedDirId === dirId && this.fileCache.size > 0) {
         log(`[GuangyaCache] 缓存命中，目录: ${dirId}，共 ${this.fileCache.size} 个文件`);
@@ -1471,25 +1613,44 @@
 
       this._cachePromise = (async () => {
         const fetchDirId = dirId;
-        const dismissToast = showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
+        const dismissToast = silent ? () => {} : showToast('', '正在获取文件信息..', 0, { icon: '<span class="cfr-toast-icon-loading"></span>', minDuration: 500, center: true });
+        let lastError = null;
+
         try {
-          log(`[GuangyaCache] 开始获取全量文件列表，目录: ${fetchDirId}`);
-          const files = await this._getAllFiles(fetchDirId);
-          if (this.cachedDirId === fetchDirId) {
-            this.fileCache = new Map(files.map(f => [f.fid, f]));
-            log(`[GuangyaCache] 全量缓存完成，共 ${this.fileCache.size} 个文件`);
-          } else {
-            log(`[GuangyaCache] 目录已变更为 ${this.cachedDirId}，丢弃旧目录 ${fetchDirId} 的缓存数据`);
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            if (attempt > 0) {
+              const delay = attempt * 1000; // 1s, 2s 递增延迟
+              log(`[GuangyaCache] 第 ${attempt} 次重试，等待 ${delay}ms...`);
+              await new Promise(r => setTimeout(r, delay));
+            }
+
+            try {
+              log(`[GuangyaCache] 开始获取全量文件列表，目录: ${fetchDirId}${silent ? '（静默预获取）' : ''}${attempt > 0 ? `，第 ${attempt + 1} 次尝试` : ''}`);
+              const files = await this._getAllFiles(fetchDirId);
+              if (this.cachedDirId === fetchDirId) {
+                this.fileCache = new Map(files.map(f => [f.fid, f]));
+                this._updateFileNameIndex();
+                log(`[GuangyaCache] 全量缓存完成，共 ${this.fileCache.size} 个文件`);
+              } else {
+                log(`[GuangyaCache] 目录已变更为 ${this.cachedDirId}，丢弃旧目录 ${fetchDirId} 的缓存数据`);
+              }
+              return; // 成功，退出重试循环
+            } catch (err) {
+              lastError = err;
+              log(`[GuangyaCache] 获取文件列表失败${attempt < maxRetries ? '，准备重试' : ''}:`, err);
+            }
           }
-        } catch (err) {
-          log(`[GuangyaCache] 获取文件列表失败:`, err);
+
+          // 所有重试都失败
+          log(`[GuangyaCache] 获取文件列表失败，已重试 ${maxRetries} 次:`, lastError);
         } finally {
           dismissToast();
-          this._cachePromise = null;
         }
       })();
 
-      return this._cachePromise;
+      return this._cachePromise.finally(() => {
+        this._cachePromise = null;
+      });
     }
 
     /** 初始化文件选择监听 */
@@ -1501,7 +1662,7 @@
     /** 绑定 checkbox 事件 */
     _bindCheckboxEvents() {
       // 全选 checkbox
-      const headerCheckbox = document.querySelector('.ant-table-thead .ant-checkbox-input');
+      const headerCheckbox = document.querySelector('.swangpan-file-list__header .swangpan-checkbox__input');
       if (headerCheckbox && !headerCheckbox.dataset.cfrBound) {
         headerCheckbox.dataset.cfrBound = '1';
         headerCheckbox.addEventListener('change', async (e) => {
@@ -1526,49 +1687,81 @@
         });
       }
 
-      // 每个文件的 checkbox
-      const rowCheckboxes = document.querySelectorAll('.ant-table-tbody .ant-checkbox-input');
-      rowCheckboxes.forEach(cb => {
-        if (cb.dataset.cfrBound) return;
-        cb.dataset.cfrBound = '1';
-        cb.addEventListener('change', async (e) => {
+      // 单个文件的选中检测：通过 click 事件 + data-state 属性（光鸭更新后 change 事件不再可靠）
+      const listBody = document.querySelector('.swangpan-file-list__body');
+      if (listBody && !listBody.dataset.cfrBound) {
+        listBody.dataset.cfrBound = '1';
+        listBody.addEventListener('click', async (e) => {
           if (this._isProcessingSelection) return;
-          this._isProcessingSelection = true;
-          try {
-            const row = e.target.closest('tr');
-            const rowKey = row?.dataset.rowKey ?? '未知';
-            // 光鸭文件名通过 div[title] 获取
-            const fileName = row?.querySelector('div[title]')?.getAttribute('title') ?? '未知';
-            if (e.target.checked) {
-              const cached = this.fileCache.get(rowKey);
-              if (cached) {
-                if (cached.resType === 1) {
-                  this.selectedFiles.set(rowKey, this._normalizeFile(cached));
-                  log(`[GuangyaCheckbox] 文件选中 - fid: ${rowKey}, 文件名: ${cached.file_name}，当前共 ${this.selectedFiles.size} 个`);
-                } else {
-                  log(`[GuangyaCheckbox] 跳过文件夹 - fid: ${rowKey}, 文件名: ${cached.file_name}`);
-                }
+          // 使用 setTimeout 等待 React 更新 DOM 属性
+          setTimeout(async () => {
+            const row = e.target.closest('.swangpan-file-list__row');
+            if (!row) return;
+
+            const fileName = row.querySelector('[title]')?.getAttribute('title') ?? '未知';
+            const isSelected = row.getAttribute('data-state') === 'selected';
+
+            this._isProcessingSelection = true;
+            try {
+              if (isSelected) {
+                await this._resolveAndSelectFile(fileName);
               } else {
-                log(`[GuangyaCheckbox] 缓存未命中 - fid: ${rowKey}，触发全量获取`);
-                await this._ensureFileCache();
-                const info = this.fileCache.get(rowKey);
-                if (info && info.resType === 1) {
-                  this.selectedFiles.set(rowKey, this._normalizeFile(info));
-                  log(`[GuangyaCheckbox] 文件选中 - fid: ${rowKey}, 文件名: ${info.file_name}，当前共 ${this.selectedFiles.size} 个`);
-                } else {
-                  log(`[GuangyaCheckbox] 跳过非文件项 - fid: ${rowKey}, 文件名: ${fileName}`);
-                }
+                this._removeSelectedFile(fileName);
               }
-            } else {
-              this.selectedFiles.delete(rowKey);
-              log(`[GuangyaCheckbox] 文件取消 - fid: ${rowKey}，当前共 ${this.selectedFiles.size} 个`);
+              if (this._onSelectionChange) this._onSelectionChange();
+            } finally {
+              this._isProcessingSelection = false;
             }
-            if (this._onSelectionChange) this._onSelectionChange();
-          } finally {
-            this._isProcessingSelection = false;
-          }
+          }, 0);
         });
-      });
+      }
+    }
+
+    /** 根据文件名解析 fid 并添加到选中列表（缓存预获取后通常直接命中） */
+    async _resolveAndSelectFile(fileName) {
+      let fid = this._findFidByFileName(fileName);
+
+      // 缓存未命中时回退：重新获取文件列表后再查找（防御性路径）
+      if (!fid || !this.fileCache.get(fid)) {
+        log(`[GuangyaCheckbox] 缓存未命中 - 文件名: ${fileName}，触发全量获取`);
+        await this._ensureFileCache();
+        fid = fid || this._findFidByFileName(fileName);
+      }
+
+      if (!fid) {
+        log(`[GuangyaCheckbox] 文件名索引中未找到 - 文件名: ${fileName}`);
+        return;
+      }
+
+      const cached = this.fileCache.get(fid);
+      if (!cached) {
+        log(`[GuangyaCheckbox] 缓存中无此文件 - fid: ${fid}，文件名: ${fileName}`);
+        return;
+      }
+
+      if (cached.resType === 1) {
+        this.selectedFiles.set(fid, this._normalizeFile(cached));
+        log(`[GuangyaCheckbox] 文件选中 - fid: ${fid}, 文件名: ${cached.file_name}，当前共 ${this.selectedFiles.size} 个`);
+      } else {
+        log(`[GuangyaCheckbox] 跳过文件夹 - fid: ${fid}, 文件名: ${cached.file_name}`);
+      }
+    }
+
+    /** 根据文件名从选中列表中移除 */
+    _removeSelectedFile(fileName) {
+      const fid = this._findFidByFileName(fileName);
+      if (fid) {
+        this.selectedFiles.delete(fid);
+      } else {
+        // fid 未知时，遍历 selectedFiles 按文件名匹配删除
+        for (const [key, val] of this.selectedFiles) {
+          if (val.name === fileName) {
+            this.selectedFiles.delete(key);
+            break;
+          }
+        }
+      }
+      log(`[GuangyaCheckbox] 文件取消 - 文件名: ${fileName}，当前共 ${this.selectedFiles.size} 个`);
     }
 
     /** 获取选中的文件列表（过滤掉目录） */
@@ -1619,13 +1812,18 @@
     /** 设置 DOM 变化观察器 */
     setupObserver(onChange) {
       let lastDirId = this._getCurrentDirId();
+      // 初始化时立即预获取当前目录的文件缓存
+      this._ensureFileCache({ silent: true });
+
       const debouncedBind = debounce(() => {
-        // 检测目录变化，清空选中状态
+        // 检测目录变化，清空选中状态并预获取新目录缓存
         const currentDirId = this._getCurrentDirId();
         if (currentDirId !== lastDirId) {
           log(`[GuangyaInit] 目录变更 ${lastDirId} -> ${currentDirId}，清空选中`);
           this.selectedFiles = new Map();
           lastDirId = currentDirId;
+          // 静默预获取新目录的文件缓存
+          this._ensureFileCache({ silent: true });
         }
         this._bindCheckboxEvents();
         if (onChange) onChange();
@@ -1738,7 +1936,7 @@
 
     fileList.appendChild(fragment);
 
-    // 排序按钮
+    // 排序按钮（支持持久化）
     const sortButton = createToggleButton('文件名降序', false, (isChecked) => {
       const fileItems = Array.from(fileList.querySelectorAll('.cfr-file-item'));
       fileItems.sort((a, b) => {
@@ -1748,14 +1946,14 @@
       });
       fileItems.forEach(item => fileList.appendChild(item));
       updateFileIndices(fileList);
-    });
+    }, STORAGE_KEY_SORT_DESC);
 
-    // 过滤按钮（互斥）
+    // 过滤按钮（互斥，支持持久化）
     const filterButtons = [];
 
     const videoCategory = String(platform.CATEGORY_VIDEO);
     const filterVideoButton = createToggleButton('仅视频', false, (isChecked) => {
-      if (isChecked) filterButtons.forEach(b => { if (b !== filterVideoButton) { b.classList.remove('cfr-toggle-button-active'); b.dataset.active = 'false'; } });
+      if (isChecked) filterButtons.forEach(b => { if (b !== filterVideoButton) { b.classList.remove('cfr-toggle-button-active'); b.dataset.active = 'false'; GM_setValue(b.dataset.storageKey, 'false'); } });
       const fileItems = fileList.querySelectorAll('.cfr-file-item');
       fileItems.forEach(item => {
         const cat = item.dataset.category;
@@ -1763,12 +1961,13 @@
       });
       updateFileIndices(fileList);
       updateStats(fileList, statsContainer);
-    });
+    }, STORAGE_KEY_FILTER_VIDEO);
+    filterVideoButton.dataset.storageKey = STORAGE_KEY_FILTER_VIDEO;
     filterButtons.push(filterVideoButton);
 
     const imageCategory = String(platform.CATEGORY_IMAGE);
     const filterImageButton = createToggleButton('仅图片', false, (isChecked) => {
-      if (isChecked) filterButtons.forEach(b => { if (b !== filterImageButton) { b.classList.remove('cfr-toggle-button-active'); b.dataset.active = 'false'; } });
+      if (isChecked) filterButtons.forEach(b => { if (b !== filterImageButton) { b.classList.remove('cfr-toggle-button-active'); b.dataset.active = 'false'; GM_setValue(b.dataset.storageKey, 'false'); } });
       const fileItems = fileList.querySelectorAll('.cfr-file-item');
       fileItems.forEach(item => {
         const cat = item.dataset.category;
@@ -1776,12 +1975,13 @@
       });
       updateFileIndices(fileList);
       updateStats(fileList, statsContainer);
-    });
+    }, STORAGE_KEY_FILTER_IMAGE);
+    filterImageButton.dataset.storageKey = STORAGE_KEY_FILTER_IMAGE;
     filterButtons.push(filterImageButton);
 
     const audioCategory = String(platform.CATEGORY_AUDIO);
     const filterAudioButton = createToggleButton('仅音频', false, (isChecked) => {
-      if (isChecked) filterButtons.forEach(b => { if (b !== filterAudioButton) { b.classList.remove('cfr-toggle-button-active'); b.dataset.active = 'false'; } });
+      if (isChecked) filterButtons.forEach(b => { if (b !== filterAudioButton) { b.classList.remove('cfr-toggle-button-active'); b.dataset.active = 'false'; GM_setValue(b.dataset.storageKey, 'false'); } });
       const fileItems = fileList.querySelectorAll('.cfr-file-item');
       fileItems.forEach(item => {
         const cat = item.dataset.category;
@@ -1789,8 +1989,22 @@
       });
       updateFileIndices(fileList);
       updateStats(fileList, statsContainer);
-    });
+    }, STORAGE_KEY_FILTER_AUDIO);
+    filterAudioButton.dataset.storageKey = STORAGE_KEY_FILTER_AUDIO;
     filterButtons.push(filterAudioButton);
+
+    // 应用持久化的初始状态
+    // 如果排序按钮初始为激活状态，执行降序排序
+    if (sortButton.dataset.active === 'true') {
+      const fileItems = Array.from(fileList.querySelectorAll('.cfr-file-item'));
+      fileItems.sort((a, b) => {
+        const nameB = b.querySelector('.cfr-file-name').textContent;
+        const nameA = a.querySelector('.cfr-file-name').textContent;
+        return nameB.localeCompare(nameA, 'zh-CN');
+      });
+      fileItems.forEach(item => fileList.appendChild(item));
+      updateFileIndices(fileList);
+    }
 
     const headerButtonsContainer = document.createElement('div');
     headerButtonsContainer.className = 'cfr-button-container-inner';
@@ -1799,6 +2013,24 @@
 
     const statsContainer = document.createElement('div');
     statsContainer.className = 'cfr-stats-container';
+
+    // 应用过滤按钮的初始状态（互斥，只应用第一个激活的）
+    const activeFilter = filterButtons.find(b => b.dataset.active === 'true');
+    if (activeFilter) {
+      const categoryMap = {
+        [STORAGE_KEY_FILTER_VIDEO]: videoCategory,
+        [STORAGE_KEY_FILTER_IMAGE]: imageCategory,
+        [STORAGE_KEY_FILTER_AUDIO]: audioCategory
+      };
+      const targetCategory = categoryMap[activeFilter.dataset.storageKey];
+      const fileItems = fileList.querySelectorAll('.cfr-file-item');
+      fileItems.forEach(item => {
+        const cat = item.dataset.category;
+        item.style.display = (cat !== targetCategory) ? 'none' : 'flex';
+      });
+      updateFileIndices(fileList);
+    }
+
     updateStats(fileList, statsContainer);
 
     const nextBtn = document.createElement('button');
