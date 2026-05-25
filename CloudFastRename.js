@@ -2,7 +2,7 @@
 // @name         云盘批量重命名助手 | 支持123云盘、夸克网盘、光鸭云盘
 // @name:en      CloudDriveFastRename
 // @namespace    meguoe
-// @version      1.0.4
+// @version      1.0.5
 // @description  云盘批量重命名助手，支持123云盘、夸克网盘、光鸭云盘，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、过滤视频/图片等功能
 // @author       meguoe@163.com
 // @license      Apache-2.0
@@ -1662,7 +1662,7 @@
     /** 绑定 checkbox 事件 */
     _bindCheckboxEvents() {
       // 全选 checkbox
-      const headerCheckbox = document.querySelector('.swangpan-file-list__header .swangpan-checkbox__input');
+      const headerCheckbox = document.querySelector('.swangpan-file-list-table__header .swangpan-checkbox__input');
       if (headerCheckbox && !headerCheckbox.dataset.cfrBound) {
         headerCheckbox.dataset.cfrBound = '1';
         headerCheckbox.addEventListener('change', async (e) => {
@@ -1688,14 +1688,14 @@
       }
 
       // 单个文件的选中检测：通过 click 事件 + data-state 属性（光鸭更新后 change 事件不再可靠）
-      const listBody = document.querySelector('.swangpan-file-list__body');
+      const listBody = document.querySelector('.swangpan-file-list-table__body');
       if (listBody && !listBody.dataset.cfrBound) {
         listBody.dataset.cfrBound = '1';
         listBody.addEventListener('click', async (e) => {
           if (this._isProcessingSelection) return;
           // 使用 setTimeout 等待 React 更新 DOM 属性
           setTimeout(async () => {
-            const row = e.target.closest('.swangpan-file-list__row');
+            const row = e.target.closest('.swangpan-file-list-table__row');
             if (!row) return;
 
             const fileName = row.querySelector('[title]')?.getAttribute('title') ?? '未知';
