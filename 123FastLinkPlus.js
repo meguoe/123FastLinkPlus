@@ -844,6 +844,7 @@
           title: result.data.title || "",
         };
       } catch (error) {
+        console.error("获取分享token时出错:", error);
         throw error;
       }
     },
@@ -927,6 +928,7 @@
           onProgress(processed + batch.length, total);
         }
       } catch (error) {
+        console.error("处理文件批次时出错:", error);
         throw error;
       }
     },
