@@ -28,6 +28,7 @@
 // @connect      yun.123pan.cn
 // @connect      api.guangyapan.com
 // @connect      guangyapan.com
+// @tag          123 夸克 光鸭 云盘 网盘 123云盘 夸克网盘 光鸭云盘 批量转存助手 123FastLinkPlus
 // ==/UserScript==
 
 (function () {
