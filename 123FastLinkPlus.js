@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         123云盘文件批量转存助手
 // @name:en      123FastLinkPlus
-// @version      1.0.4
-// @description  一键将夸克网盘、天翼云盘的个人文件和分享链接转存到123云盘
+// @version      1.0.5
+// @description  一键将夸克网盘、天翼云盘、光鸭网盘的个人文件和分享链接转存到123云盘
 // @author       meguoe
 // @license      Apache-2.0
 // @match        https://pan.quark.cn/*
@@ -10,6 +10,8 @@
 // @match        https://pan.quark.cn/s/*
 // @match        https://drive.quark.cn/s/*
 // @match        https://cloud.189.cn/web/*
+// @match        https://guangyapan.com/*
+// @match        https://*.guangyapan.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=123pan.com
 // @grant        GM_setClipboard
 // @grant        GM_notification
@@ -24,6 +26,8 @@
 // @connect      cloud.189.cn
 // @connect      www.123pan.com
 // @connect      yun.123pan.cn
+// @connect      api.guangyapan.com
+// @connect      guangyapan.com
 // ==/UserScript==
 
 (function () {
@@ -2633,6 +2637,359 @@
     },
   };
 
+  const guangyaService = {
+    // 文件缓存: fileName -> { fileId, fileName, isFolder, ... }
+    _fileNameMap: null,
+
+    // 获取认证 Token
+    getAuthToken() {
+      try {
+        const key = Object.keys(localStorage).find(k => k.startsWith('credentials_'));
+        if (!key) return null;
+        const credentials = JSON.parse(localStorage.getItem(key));
+        return `${credentials.token_type} ${credentials.access_token}`;
+      } catch (e) {
+        console.error("[123Link] [GuangyaService]", "获取Token失败:", e);
+        return null;
+      }
+    },
+
+    // 从 URL hash 解析当前目录 ID
+    _getCurrentDirId() {
+      const hash = window.location.hash;
+      const segments = hash.replace(/^#\/home\/all\/?/, '').split('/').filter(Boolean);
+      if (segments.length === 0) return '';
+      const last = segments[segments.length - 1];
+      return last.split('-')[0];
+    },
+
+    // 构建文件名 -> fileId 索引（从文件列表 API 获取）
+    async _buildFileNameMap() {
+      const parentId = this._getCurrentDirId() || '';
+      const token = this.getAuthToken();
+      if (!token) return;
+
+      try {
+        const data = await new Promise((resolve, reject) => {
+          GM_xmlhttpRequest({
+            method: 'POST',
+            url: 'https://api.guangyapan.com/nd.bizuserres.s/v1/file/get_file_list',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token,
+            },
+            data: JSON.stringify({
+              page: 0,
+              parentId,
+              pageSize: 1000,
+              orderBy: 1,
+              sortType: 1,
+            }),
+            responseType: 'json',
+            onload(res) {
+              if (res.status === 200) resolve(res.response);
+              else reject(new Error(`请求失败: ${res.status}`));
+            },
+            onerror(err) { reject(new Error('网络请求失败')); },
+          });
+        });
+
+        const list = data?.data?.list ?? [];
+        this._fileNameMap = {};
+        for (const item of list) {
+          this._fileNameMap[item.fileName] = {
+            fileId: item.fileId,
+            fileName: item.fileName,
+            isFolder: item.resType !== 1,
+            fileSize: item.fileSize,
+          };
+        }
+        console.log("[123Link] [GuangyaService]", `文件名索引构建完成，共 ${list.length} 项`);
+      } catch (e) {
+        console.error("[123Link] [GuangyaService]", "构建文件名索引失败:", e);
+        this._fileNameMap = {};
+      }
+    },
+
+    // 获取选中的文件列表（通过文件名查找 fileId）
+    async getSelectedFiles() {
+      try {
+        const isSharePage = /^\/s\//.test(location.pathname);
+
+        if (isSharePage) {
+          // 分享页面：直接从 DOM 获取选中文件
+          const selectedItems = [];
+          const rows = document.querySelectorAll('.swangpan-file-list-table__row[data-state="selected"]');
+          console.log("[123Link] [GuangyaService]", `分享页选中行数: ${rows.length}`);
+          rows.forEach(row => {
+            const titleEl = row.querySelector('[title]');
+            const fileName = titleEl ? titleEl.getAttribute('title') : '';
+            if (fileName) {
+              selectedItems.push({
+                fileId: '',
+                fileName,
+                isFolder: false,
+              });
+              console.log("[123Link] [GuangyaService]", `分享页选中: ${fileName}`);
+            }
+          });
+          return selectedItems;
+        }
+
+        // 个人文件页面：构建文件名索引
+        await this._buildFileNameMap();
+
+        const selectedItems = [];
+        const rows = document.querySelectorAll('.swangpan-file-list-table__row[data-state="selected"]');
+        rows.forEach(row => {
+          const titleEl = row.querySelector('[title]');
+          const fileName = titleEl ? titleEl.getAttribute('title') : '';
+          if (!fileName) return;
+
+          // 通过文件名查找 fileId
+          const fileInfo = this._fileNameMap?.[fileName];
+          if (fileInfo) {
+            selectedItems.push({
+              fileId: fileInfo.fileId,
+              fileName: fileInfo.fileName,
+              isFolder: fileInfo.isFolder,
+              fileSize: fileInfo.fileSize,
+            });
+          } else {
+            // 索引中没有，至少保留文件名
+            console.warn("[123Link] [GuangyaService]", `文件名索引中未找到: ${fileName}`);
+            selectedItems.push({
+              fileId: '',
+              fileName,
+              isFolder: false,
+            });
+          }
+        });
+        return selectedItems;
+      } catch (e) {
+        console.error("[123Link] [GuangyaService]", "获取选中文件失败:", e);
+        return [];
+      }
+    },
+
+    // 获取文件详情（含MD5）
+    async getFileDetail(fileId) {
+      const token = this.getAuthToken();
+      if (!token) throw new Error('未登录光鸭网盘');
+
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'POST',
+          url: 'https://api.guangyapan.com/userres/v1/file/get_file_detail',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token,
+          },
+          data: JSON.stringify({ fileId }),
+          responseType: 'json',
+          onload(res) {
+            if (res.status === 200 && res.response?.msg === 'success') {
+              resolve(res.response.data.fileInfo);
+            } else {
+              reject(new Error(res.response?.msg || '获取文件详情失败'));
+            }
+          },
+          onerror(err) { reject(new Error('网络请求失败')); },
+        });
+      });
+    },
+
+    // 获取文件列表（单页）
+    async getFileList(parentId, pageSize = 1000, page = 0) {
+      const token = this.getAuthToken();
+      if (!token) throw new Error('未登录光鸭网盘');
+
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'POST',
+          url: 'https://api.guangyapan.com/nd.bizuserres.s/v1/file/get_file_list',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token,
+          },
+          data: JSON.stringify({
+            page,
+            parentId,
+            pageSize,
+            orderBy: 1,
+            sortType: 1,
+          }),
+          responseType: 'json',
+          onload(res) {
+            if (res.status === 200) {
+              resolve(res.response);
+            } else {
+              reject(new Error(`请求失败: ${res.status}`));
+            }
+          },
+          onerror(err) { reject(new Error('网络请求失败')); },
+        });
+      });
+    },
+
+    // 递归获取文件夹内所有文件
+    async getFolderFiles(folderId, folderPath = '', onProgress) {
+      const allFiles = [];
+      let page = 0;
+      const pageSize = 1000;
+
+      while (true) {
+        const data = await this.getFileList(folderId, pageSize, page);
+        const rawList = data?.data?.list ?? [];
+        const total = data?.data?.total ?? 0;
+
+        for (const item of rawList) {
+          const itemPath = folderPath ? `${folderPath}/${item.fileName}` : item.fileName;
+
+          if (item.resType !== 1) {
+            // 文件夹，递归获取
+            const subFiles = await this.getFolderFiles(item.fileId, itemPath, onProgress);
+            allFiles.push(...subFiles);
+          } else {
+            // 文件，获取MD5后添加
+            try {
+              const detail = await this.getFileDetail(item.fileId);
+              allFiles.push({
+                path: itemPath,
+                etag: (detail.md5 || '').toLowerCase(),
+                size: item.fileSize || detail.fileSize || 0,
+              });
+              if (onProgress) onProgress();
+            } catch (e) {
+              console.error("[123Link] [GuangyaService]", "获取文件详情失败:", item.fileName, e);
+              // 跳过无法获取详情的文件
+            }
+          }
+        }
+
+        if (rawList.length === 0 || allFiles.length >= total) break;
+        page++;
+      }
+
+      return allFiles;
+    },
+
+    // 获取分享 Token
+    async getShareToken(shareId) {
+      console.log("[123Link] [GuangyaService]", `获取分享Token，shareId: ${shareId}`);
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'POST',
+          url: 'https://api.guangyapan.com/userres/v1/get_share_access_token',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          data: JSON.stringify({ shareId }),
+          responseType: 'json',
+          onload(res) {
+            console.log("[123Link] [GuangyaService]", `获取分享Token完整响应:`, JSON.stringify(res.response));
+            if (res.status === 200 && res.response?.msg === 'success') {
+              // 尝试多种可能的字段名
+              const token = res.response.data?.accessToken
+                         || res.response.data?.access_token
+                         || res.response.data?.token
+                         || res.response.data?.shareToken
+                         || '';
+              console.log("[123Link] [GuangyaService]", `提取的token:`, token.substring(0, 50) + '...');
+              console.log("[123Link] [GuangyaService]", `完整data对象:`, JSON.stringify(res.response.data));
+              resolve(token);
+            } else {
+              reject(new Error(res.response?.msg || '获取分享Token失败'));
+            }
+          },
+          onerror(err) {
+            console.error("[123Link] [GuangyaService]", "获取分享Token网络错误:", err);
+            reject(new Error('网络请求失败'));
+          },
+        });
+      });
+    },
+
+    // 获取分享文件列表
+    async getShareFiles(accessToken, parentId = '') {
+      console.log("[123Link] [GuangyaService]", `获取分享文件列表，parentId: "${parentId}"`);
+
+      // 使用用户个人登录 token 作为 Authorization
+      const authToken = this.getAuthToken();
+      console.log("[123Link] [GuangyaService]", `authToken存在: ${!!authToken}, accessToken存在: ${!!accessToken}`);
+
+      const requestBody = {
+        pageSize: 1000,
+        accessToken,
+        orderBy: 0,
+        sortType: 0,
+        parentId,
+      };
+      console.log("[123Link] [GuangyaService]", `请求体:`, JSON.stringify(requestBody));
+
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'POST',
+          url: 'https://api.guangyapan.com/userres/v1/get_share_page_files_list',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': authToken || '',
+          },
+          data: JSON.stringify(requestBody),
+          responseType: 'json',
+          onload(res) {
+            console.log("[123Link] [GuangyaService]", `HTTP状态: ${res.status}`);
+            console.log("[123Link] [GuangyaService]", `响应文本:`, res.responseText?.substring(0, 500));
+            console.log("[123Link] [GuangyaService]", `解析后响应:`, res.response);
+            if (res.status === 200 && res.response) {
+              resolve(res.response);
+            } else {
+              reject(new Error(`请求失败: ${res.status}, 响应: ${res.responseText?.substring(0, 200)}`));
+            }
+          },
+          onerror(err) {
+            console.error("[123Link] [GuangyaService]", "网络错误:", err);
+            reject(new Error('网络请求失败'));
+          },
+          ontimeout() {
+            console.error("[123Link] [GuangyaService]", "请求超时");
+            reject(new Error('请求超时'));
+          },
+        });
+      });
+    },
+
+    // 递归获取分享文件夹内所有文件
+    async scanShareFiles(accessToken, parentId = '', path = '') {
+      console.log("[123Link] [GuangyaService]", `扫描分享文件，parentId: "${parentId}", path: ${path || '/'}`);
+      const allFiles = [];
+      const data = await this.getShareFiles(accessToken, parentId);
+      const items = data?.data?.list ?? [];
+      console.log("[123Link] [GuangyaService]", `当前目录文件数: ${items.length}`);
+
+      for (const item of items) {
+        const itemPath = path ? `${path}/${item.fileName}` : item.fileName;
+
+        if (item.resType !== 1) {
+          // 文件夹，递归
+          console.log("[123Link] [GuangyaService]", `递归进入文件夹: ${item.fileName}, fileId: ${item.fileId}`);
+          const subFiles = await this.scanShareFiles(accessToken, item.fileId, itemPath);
+          allFiles.push(...subFiles);
+        } else {
+          allFiles.push({
+            path: itemPath,
+            fileId: item.fileId,
+            etag: (item.md5 || '').toLowerCase(),
+            size: item.fileSize || 0,
+          });
+          console.log("[123Link] [GuangyaService]", `添加文件: ${itemPath}, fileId: ${item.fileId}`);
+        }
+      }
+
+      return allFiles;
+    },
+  };
+
   async function generateAndSaveTo123Pan() {
     try {
       // 先检查123云盘认证信息
@@ -2653,16 +3010,20 @@
 
       // 先检查是否有已选择的文件或文件夹
       const hostname = location.hostname;
+      const path = location.pathname;
       let hasSelectedFiles = false;
-      
+
       if (hostname.includes("cloud.189.cn")) {
         const selectedFiles = tianyiService.getSelectedFiles();
         hasSelectedFiles = selectedFiles.length > 0;
       } else if (hostname.includes("quark.cn")) {
         const selectedItems = utils.getSelectedList();
         hasSelectedFiles = selectedItems.length > 0;
+      } else if (hostname.includes("guangyapan.com")) {
+        const selectedItems = await guangyaService.getSelectedFiles();
+        hasSelectedFiles = selectedItems.length > 0;
       }
-      
+
       if (!hasSelectedFiles) {
         utils.showError("请选择要转存的文件或文件夹");
         return;
@@ -2706,6 +3067,16 @@
               shareTitle = result.title;
             } else {
               json = await generateHomeJsonInternal();
+            }
+          } else if (hostname.includes("guangyapan.com")) {
+            const isSharePage = /^\/s\//.test(path);
+            if (isSharePage) {
+              const selectedItems = await guangyaService.getSelectedFiles();
+              const result = await generateGuangyaShareJsonInternal(selectedItems);
+              json = result.json;
+              shareTitle = result.title;
+            } else {
+              json = await generateGuangyaHomeJsonInternal();
             }
           }
 
@@ -3022,6 +3393,138 @@
     }
   }
 
+  async function generateGuangyaHomeJsonInternal() {
+    utils.showLoadingDialog("正在转存文件", "准备中...");
+
+    try {
+      const selectedItems = await guangyaService.getSelectedFiles();
+
+      if (selectedItems.length === 0) {
+        throw new Error("请选择要转存的文件或文件夹");
+      }
+
+      const allFiles = [];
+      let totalFilesFound = 0;
+
+      for (const item of selectedItems) {
+        if (item.isFolder) {
+          const folderFiles = await guangyaService.getFolderFiles(
+            item.fileId,
+            item.fileName,
+            () => { totalFilesFound++; }
+          );
+          allFiles.push(...folderFiles);
+        } else {
+          try {
+            const detail = await guangyaService.getFileDetail(item.fileId);
+            allFiles.push({
+              path: item.fileName,
+              etag: (detail.md5 || '').toLowerCase(),
+              size: detail.fileSize || 0,
+            });
+            totalFilesFound++;
+          } catch (e) {
+            console.error("[123Link] [Guangya]", "获取文件详情失败:", item.fileName, e);
+          }
+        }
+      }
+
+      if (allFiles.length === 0) {
+        throw new Error("没有找到任何文件");
+      }
+
+      const json = utils.generateRapidTransferJson(allFiles);
+      return json;
+    } catch (error) {
+      utils.closeLoadingDialog();
+      throw error;
+    }
+  }
+
+  async function generateGuangyaShareJsonInternal(selectedItems) {
+    utils.showLoadingDialog("正在转存文件", "准备中...");
+
+    try {
+      // 从 URL 解析分享 ID
+      const match = location.pathname.match(/\/s\/([a-zA-Z0-9_-]+)/);
+      if (!match) {
+        throw new Error("无法获取分享ID");
+      }
+      const shareId = match[1];
+      console.log("[123Link] [Guangya]", `分享页面，shareId: ${shareId}`);
+
+      // 获取分享 Token
+      const accessToken = await guangyaService.getShareToken(shareId);
+      if (!accessToken) {
+        throw new Error("无法获取分享Token，请确保已登录或分享链接有效");
+      }
+      console.log("[123Link] [Guangya]", `获取accessToken成功`);
+
+      // 获取完整分享文件列表（获取 fileId）
+      const shareFiles = await guangyaService.scanShareFiles(accessToken);
+      console.log("[123Link] [Guangya]", `分享文件列表获取完成，共 ${shareFiles.length} 个文件`);
+
+      // 按文件名建立索引（保留 fileId 和原始信息）
+      const fileNameMap = {};
+      for (const file of shareFiles) {
+        const name = file.path.split('/').pop();
+        fileNameMap[name] = file;
+      }
+      console.log("[123Link] [Guangya]", `文件名索引:`, JSON.stringify(Object.keys(fileNameMap)));
+
+      // 匹配选中的文件，获取 fileId
+      const matchedFiles = [];
+      const selectedNames = selectedItems.map(i => i.fileName);
+      console.log("[123Link] [Guangya]", `选中文件名:`, JSON.stringify(selectedNames));
+
+      for (const item of selectedItems) {
+        const matched = fileNameMap[item.fileName];
+        if (matched && matched.fileId) {
+          matchedFiles.push(matched);
+          console.log("[123Link] [Guangya]", `[匹配成功] ${item.fileName} -> fileId: ${matched.fileId}`);
+        } else {
+          console.warn("[123Link] [Guangya]", `[匹配失败] ${item.fileName}, 索引中: ${item.fileName in fileNameMap}, fileId: ${matched?.fileId || '(无)'}`);
+        }
+      }
+
+      console.log("[123Link] [Guangya]", `匹配完成，共 ${matchedFiles.length} 个文件`);
+
+      if (matchedFiles.length === 0) {
+        throw new Error("没有匹配到选中的文件");
+      }
+
+      // 逐个获取文件详情（MD5）
+      const allFiles = [];
+      for (const file of matchedFiles) {
+        try {
+          const detail = await guangyaService.getFileDetail(file.fileId);
+          allFiles.push({
+            path: file.path,
+            etag: (detail.md5 || '').toLowerCase(),
+            size: detail.fileSize || 0,
+          });
+          console.log("[123Link] [Guangya]", `获取详情成功: ${file.path}, md5: ${detail.md5 || '(无)'}`);
+        } catch (e) {
+          console.error("[123Link] [Guangya]", `获取文件详情失败: ${file.path}`, e);
+        }
+      }
+
+      console.log("[123Link] [Guangya]", `最终文件数: ${allFiles.length}`);
+
+      if (allFiles.length === 0) {
+        throw new Error("没有获取到文件的MD5信息");
+      }
+
+      const json = utils.generateRapidTransferJson(allFiles);
+      console.log("[123Link] [Guangya]", `秒链JSON生成完成`);
+      return { json, title: '' };
+    } catch (error) {
+      console.error("[123Link] [Guangya]", "分享页面转存失败:", error);
+      utils.closeLoadingDialog();
+      throw error;
+    }
+  }
+
   function addButton() {
     const hostname = location.hostname;
     let container;
@@ -3133,6 +3636,66 @@
         container.insertBefore(buttonWrapper, container.firstChild);
       }
       buttonWrapper.querySelector("button").onclick = generateAndSaveTo123Pan;
+    } else if (hostname.includes("guangyapan.com")) {
+      const path = location.pathname;
+      const isSharePage = /^\/s\//.test(path);
+
+
+      if (isSharePage) {
+        // // 分享页面：克隆"保存到云盘"按钮样式，在其后面插入
+        // const saveBtn = document.querySelector('[aria-label="cloudsave"]');
+        // if (!saveBtn) return;
+
+        // const saveButton = saveBtn.closest('button');
+        // if (!saveButton) return;
+
+        // // 克隆"保存到云盘"按钮的样式
+        // const button = saveButton.cloneNode(true);
+        // button.id = "quark-json-generator-btn";
+        // button.setAttribute('aria-label', 'transfer123');
+
+        // // 重新构建按钮内容：图标 + 文字
+        // button.innerHTML = `
+        //   <span class="ant-btn-icon">
+        //     <span role="img" aria-label="transfer" class="swangpan-icon swangpan-icon-transfer" style="display: inline-flex; line-height: 0;">
+        //       <svg width="1em" height="1em" fill="none" viewBox="0 0 18 18"><path fill="currentColor" d="M6.94 1.25c.857 0 1.689.294 2.356.833l.35.283c.4.323.9.5 1.414.5H14a3.75 3.75 0 0 1 3.75 3.75V13A3.75 3.75 0 0 1 14 16.75H4A3.75 3.75 0 0 1 .25 13V5A3.75 3.75 0 0 1 4 1.25zM4 2.75A2.25 2.25 0 0 0 1.75 5v8A2.25 2.25 0 0 0 4 15.25h10A2.25 2.25 0 0 0 16.25 13V6.615A2.25 2.25 0 0 0 14 4.365h-2.94a3.75 3.75 0 0 1-2.356-.833l-.35-.282c-.4-.323-.9-.5-1.415-.5zm4.97 4.22a.75.75 0 0 1 1.06 0l2.5 2.5a.75.75 0 0 1 0 1.06l-2.5 2.5a.75.75 0 1 1-1.06-1.06l1.22-1.22H5a.75.75 0 0 1 0-1.5h5.19L8.97 8.03a.75.75 0 0 1 0-1.06"></path></svg>
+        //     </span>
+        //   </span>
+        //   <span>转存到123云盘</span>
+        // `;
+
+        // button.onclick = generateAndSaveTo123Pan;
+        // saveButton.after(button);
+
+        // // 隐藏"浏览器下载"按钮
+        // const downloadBtn = document.querySelector('[aria-label="download"]');
+        // if (downloadBtn) {
+        //   const downloadButton = downloadBtn.closest('button');
+        //   if (downloadButton) downloadButton.style.display = 'none';
+        // }
+        return;
+      } else {
+        // 个人文件页面：克隆上传按钮样式，放在上传和新建文件夹之间
+        const uploadBtn = document.querySelector('[aria-label="upload"]');
+        if (!uploadBtn) return;
+
+        const uploadButton = uploadBtn.closest('button');
+        if (!uploadButton) return;
+
+        const folderBtn = document.querySelector('[aria-label="addfolder"]');
+        const folderButton = folderBtn ? folderBtn.closest('button') : null;
+
+        const button = uploadButton.cloneNode(false);
+        button.id = "quark-json-generator-btn";
+        button.innerHTML = '<svg width="1em" height="1em" fill="none" viewBox="0 0 18 18" style="margin-right: 4px; vertical-align: -2px;"><path fill="currentColor" d="M6.94 1.25c.857 0 1.689.294 2.356.833l.35.283c.4.323.9.5 1.414.5H14a3.75 3.75 0 0 1 3.75 3.75V13A3.75 3.75 0 0 1 14 16.75H4A3.75 3.75 0 0 1 .25 13V5A3.75 3.75 0 0 1 4 1.25zM4 2.75A2.25 2.25 0 0 0 1.75 5v8A2.25 2.25 0 0 0 4 15.25h10A2.25 2.25 0 0 0 16.25 13V6.615A2.25 2.25 0 0 0 14 4.365h-2.94a3.75 3.75 0 0 1-2.356-.833l-.35-.282c-.4-.323-.9-.5-1.415-.5zm4.97 4.22a.75.75 0 0 1 1.06 0l2.5 2.5a.75.75 0 0 1 0 1.06l-2.5 2.5a.75.75 0 1 1-1.06-1.06l1.22-1.22H5a.75.75 0 0 1 0-1.5h5.19L8.97 8.03a.75.75 0 0 1 0-1.06"></path></svg>转存到123云盘';
+        button.onclick = generateAndSaveTo123Pan;
+
+        if (folderButton) {
+          folderButton.before(button);
+        } else {
+          uploadButton.after(button);
+        }
+      }
     }
   }
 
@@ -3167,7 +3730,7 @@
     }
 
     const hostname = location.hostname;
-    if (hostname.includes("quark.cn") || hostname.includes("cloud.189.cn")) {
+    if (hostname.includes("quark.cn") || hostname.includes("cloud.189.cn") || hostname.includes("guangyapan.com")) {
       // 创建MutationObserver并保存引用
       mutationObserver = new MutationObserver(() => {
         addButton();
