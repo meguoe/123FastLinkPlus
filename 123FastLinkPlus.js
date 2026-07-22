@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         123云盘文件批量转存助手
 // @name:en      123FastLinkPlus
-// @version      1.0.2
+// @version      1.0.4
 // @description  一键将夸克网盘、天翼云盘的个人文件和分享链接转存到123云盘
 // @author       meguoe
 // @license      Apache-2.0
@@ -23,6 +23,7 @@
 // @connect      pc-api.uc.cn
 // @connect      cloud.189.cn
 // @connect      www.123pan.com
+// @connect      yun.123pan.cn
 // ==/UserScript==
 
 (function () {
@@ -1660,7 +1661,7 @@
       initApiClient() {
         const auth = utils.get123PanAuth();
         this.apiClient = {
-          host: "https://www.123pan.com",
+          host: "https://yun.123pan.cn",
           authToken: auth.authToken,
           loginUuid: auth.loginUuid,
           appVersion: "3",
