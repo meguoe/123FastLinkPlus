@@ -3,7 +3,7 @@
 // @name:cn      云盘批量重命名助手 | 支持123云盘、夸克网盘、光鸭云盘
 // @name:en      CloudDriveFastRename
 // @namespace    meguoe
-// @version      1.0.6
+// @version      1.0.7
 // @description  云盘批量重命名助手，夸克网盘批量重命名 ｜ 123云盘批量重命名 ｜ 光鸭云盘批量重命名，支持123云盘、夸克网盘、光鸭云盘，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、过滤视频/图片等功能
 // @author       meguoe@163.com
 // @license      Apache-2.0
@@ -765,10 +765,13 @@
           const self = this;
 
           const selectAllClickHandler = (e) => {
-            const checkbox = e.target.closest('.ant-checkbox-input[aria-label="Select all"]');
-            if (!checkbox) return;
+            const label = e.target.closest('label[class*="selectionCheckbox"]');
+            if (!label) return;
+            if (!label.closest('thead')) return;
             setTimeout(() => {
-              if (checkbox.checked) {
+              const headerLabel = document.querySelector('thead label[class*="selectionCheckbox"]');
+              const checked = !!headerLabel && [...headerLabel.classList].some(c => c.includes('checked'));
+              if (checked) {
                 self.isSelectAll = true;
                 self.unselectedRowKeys = new Set();
                 self.selectedRowKeys = new Set();
@@ -804,10 +807,10 @@
             for (const mutation of mutations) {
               if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') continue;
               const target = mutation.target;
-              if (!target.classList || !target.classList.contains('ant-table-row')) continue;
+              if (!target.classList || target.getAttribute('role') !== 'row') continue;
               const rowKey = target.getAttribute('data-row-key');
               if (!rowKey) continue;
-              const isSelected = target.classList.contains('ant-table-row-selected');
+              const isSelected = [...target.classList].some(c => c.includes('rowSelected'));
               pendingRowChanges.set(rowKey, isSelected);
             }
             if (pendingRowChanges.size > 0) {
