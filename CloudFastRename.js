@@ -3,7 +3,7 @@
 // @name:cn      云盘批量重命名助手 | 支持123云盘、夸克网盘、光鸭云盘
 // @name:en      CloudDriveFastRename
 // @namespace    meguoe
-// @version      1.0.7
+// @version      1.0.8
 // @description  云盘批量重命名助手，夸克网盘批量重命名 ｜ 123云盘批量重命名 ｜ 光鸭云盘批量重命名，支持123云盘、夸克网盘、光鸭云盘，支持按序号、追加、查找替换、正则替换、格式替换等多种重命名模式，提供拖拽排序、实时预览、过滤视频/图片等功能
 // @author       meguoe@163.com
 // @license      Apache-2.0
@@ -565,13 +565,15 @@
 
     /** 获取当前目录的父级文件 ID（根目录返回 '0'） */
     async _getParentFileId() {
+      // 优先从 URL 的 homeFilePath 参数解析当前目录 ID（如 ?homeFilePath=18553781,18633844,57529107）
       try {
-        const homeFilePath = JSON.parse(sessionStorage['filePath'])['homeFilePath'];
-        const parentFileId = (homeFilePath[homeFilePath.length - 1] || 0);
-        return parentFileId.toString();
+        const urlIds = new URLSearchParams(window.location.search).get('homeFilePath');
+        if (urlIds) {
+          const ids = urlIds.split(',').map(s => s.trim()).filter(Boolean);
+          if (ids.length > 0) return ids[ids.length - 1];
+        }
       } catch (e) {
-        log('[Platform123] 获取父级文件ID失败:', e);
-        return '0';
+        log('[Platform123] 从 URL 解析目录ID失败:', e);
       }
     }
 
