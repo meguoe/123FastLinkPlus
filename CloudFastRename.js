@@ -240,6 +240,8 @@
       border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;
     }
     .cfr-rename-config-input:focus { border-color: #2961D9; }
+    .cfr-rename-config-input::selection { background: #2961D9; color: #fff; }
+    .cfr-rename-config-input::-moz-selection { background: #2961D9; color: #fff; }
   `;
 
   // 注入样式
@@ -1858,8 +1860,8 @@
     const fileList = document.createElement('div');
     fileList.className = 'cfr-file-list';
 
-    // 默认按文件名升序
-    const sortedFiles = [...files].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    // 默认按文件名升序（自然排序，数字敏感）
+    const sortedFiles = [...files].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' }));
 
     let draggedItem = null;
     const fragment = document.createDocumentFragment();
@@ -1948,7 +1950,9 @@
       fileItems.sort((a, b) => {
         const nameA = a.querySelector('.cfr-file-name').textContent;
         const nameB = b.querySelector('.cfr-file-name').textContent;
-        return isChecked ? nameB.localeCompare(nameA, 'zh-CN') : nameA.localeCompare(nameB, 'zh-CN');
+        return isChecked
+          ? nameB.localeCompare(nameA, 'zh-CN', { numeric: true, sensitivity: 'base' })
+          : nameA.localeCompare(nameB, 'zh-CN', { numeric: true, sensitivity: 'base' });
       });
       fileItems.forEach(item => fileList.appendChild(item));
       updateFileIndices(fileList);
@@ -1999,14 +2003,13 @@
     filterAudioButton.dataset.storageKey = STORAGE_KEY_FILTER_AUDIO;
     filterButtons.push(filterAudioButton);
 
-    // 应用持久化的初始状态
     // 如果排序按钮初始为激活状态，执行降序排序
     if (sortButton.dataset.active === 'true') {
       const fileItems = Array.from(fileList.querySelectorAll('.cfr-file-item'));
       fileItems.sort((a, b) => {
         const nameB = b.querySelector('.cfr-file-name').textContent;
         const nameA = a.querySelector('.cfr-file-name').textContent;
-        return nameB.localeCompare(nameA, 'zh-CN');
+        return nameB.localeCompare(nameA, 'zh-CN', { numeric: true, sensitivity: 'base' });
       });
       fileItems.forEach(item => fileList.appendChild(item));
       updateFileIndices(fileList);
