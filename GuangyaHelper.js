@@ -79,13 +79,13 @@
   let xunleiRetryNotifier = null;
   if (isXunleiPan) installXunleiRequestCapture();
   const SCRIPT_VERSION = typeof GM_info !== 'undefined' && GM_info?.script?.version ? GM_info.script.version : '0.2.1';
-  const styles = ` #${ROOT_ID}{position:fixed;top:50%;right:22px;z-index:2147483000;transform:translateY(-50%);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}#${ROOT_ID} *,#${ROOT_ID} *::before,#${ROOT_ID} *::after{box-sizing:border-box;}.gyh-trigger{width:52px;height:52px;padding:0;color:#ffffff;background:linear-gradient(145deg,#2e82f5,#245fd2);border:1px solid rgba(255,255,255,0.35);border-radius:16px;box-shadow:0 10px 28px rgba(36,95,210,0.3),0 2px 7px rgba(18,51,106,0.18);cursor:pointer;display:grid;place-items:center;align-content:center;gap:1px;transition:transform 180ms ease,box-shadow 180ms ease,background 180ms ease;}.gyh-trigger:hover{background:linear-gradient(145deg,#4296ff,#2869e6);box-shadow:0 13px 32px rgba(36,95,210,0.36),0 3px 9px rgba(18,51,106,0.2);transform:translateY(-2px);}.gyh-trigger:focus-visible,.gyh-action:focus-visible{outline:3px solid rgba(45,130,245,0.35);outline-offset:3px;}.gyh-trigger svg{width:21px;height:21px;transition:transform 200ms ease;}.gyh-trigger-label{font-size:10px;font-weight:650;line-height:13px;letter-spacing:0;}.gyh-trigger[aria-expanded="true"] svg{transform:rotate(-10deg) scale(0.93);}.gyh-panel{position:absolute;top:50%;right:64px;width:264px;padding:14px;color:#17233a;background:rgba(255,255,255,0.96);border:1px solid rgba(213,225,241,0.92);border-radius:14px;box-shadow:0 18px 48px rgba(36,66,112,0.18),0 2px 8px rgba(36,66,112,0.08);opacity:0;pointer-events:none;transform:translateY(-50%) translateX(10px) scale(0.98);transform-origin:right center;transition:opacity 160ms ease,transform 160ms ease;}.gyh-panel::after{position:absolute;top:50%;right:-7px;width:12px;height:12px;content:"";background:#ffffff;border-top:1px solid rgba(213,225,241,0.92);border-right:1px solid rgba(213,225,241,0.92);transform:translateY(-50%) rotate(45deg);}.gyh-panel.is-open{opacity:1;pointer-events:auto;transform:translateY(-50%) translateX(0) scale(1);}.gyh-panel-header{display:flex;align-items:flex-start;justify-content:space-between;padding:3px 2px 12px;}.gyh-title{margin:0;font-size:15px;font-weight:700;line-height:21px;letter-spacing:0;}.gyh-subtitle{margin:2px 0 0;color:#8290a7;font-size:12px;line-height:17px;letter-spacing:0;}.gyh-status{padding:3px 7px;color:#2a78dd;background:#edf5ff;border-radius:5px;font-size:11px;font-weight:600;line-height:16px;white-space:nowrap;}.gyh-actions{display:grid;gap:7px;}.gyh-action{width:100%;height:48px;padding:5px 10px;text-align:left;color:#20304a;background:#f7faff;border:1px solid #e5edf8;border-radius:8px;cursor:pointer;display:grid;grid-template-columns:34px minmax(0,1fr) 17px;align-items:center;gap:9px;transition:background 160ms ease,border-color 160ms ease;}.gyh-action:hover{background:#f1f7ff;border-color:#c8def8;}.gyh-action-icon{width:34px;height:34px;color:#2877de;background:#e8f2ff;border-radius:8px;display:grid;place-items:center;}.gyh-action-icon svg{width:18px;height:18px;}.gyh-action:nth-child(2) .gyh-action-icon{color:#8a63cc;background:#f2ecff;}.gyh-action:nth-child(3) .gyh-action-icon{color:#de7a34;background:#fff1e8;}.gyh-action-name{display:block;font-size:13px;font-weight:650;line-height:18px;letter-spacing:0;}.gyh-action-note{display:block;margin-top:1px;color:#8491a5;font-size:11px;line-height:15px;letter-spacing:0;}.gyh-action-arrow{color:#a6b4c8;font-size:18px;font-weight:400;line-height:18px;text-align:center;}.gyh-rename-overlay{position:fixed;inset:0;z-index:2147483001;padding:16px;background:rgba(19,32,53,0.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;animation:gyh-rename-fade-in 160ms ease;}.gyh-rename-modal{width:min(680px,calc(100vw - 32px));max-height:min(640px,calc(100vh - 32px));overflow:hidden;color:#17233a;background:#ffffff;border:1px solid rgba(213,225,241,0.96);border-radius:16px;box-shadow:0 24px 70px rgba(19,44,82,0.28),0 4px 14px rgba(19,44,82,0.12);display:flex;flex-direction:column;animation:gyh-rename-rise-in 180ms ease;}.gyh-rename-header{padding:10px;border-bottom:1px solid #edf1f7;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}.gyh-rename-heading{display:flex;align-items:center;gap:11px;min-width:0;}.gyh-rename-heading-icon{width:36px;height:36px;flex:0 0 auto;color:#2877de;background:#e8f2ff;border-radius:10px;display:grid;place-items:center;}.gyh-rename-heading-icon svg{width:19px;height:19px;}.gyh-rename-title{margin:0;font-size:16px;font-weight:700;line-height:22px;}.gyh-rename-subtitle{margin:2px 0 0;color:#8491a5;font-size:12px;line-height:17px;}.gyh-rename-close{width:30px;height:30px;flex:0 0 auto;padding:0;color:#8491a5;background:transparent;border:0;border-radius:7px;cursor:pointer;display:grid;place-items:center;transition:background 160ms ease,color 160ms ease;}.gyh-rename-close:hover{color:#263b5d;background:#f3f6fa;}.gyh-rename-close svg{width:17px;height:17px;}.gyh-rename-body{min-height:0;padding:10px;overflow-y:auto;}.gyh-rename-section{margin-top:12px;padding:10px;border:1px solid #e7edf6;border-radius:10px;}.gyh-rename-section:first-of-type{margin-top:0;}.gyh-rename-section-head{min-height:22px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between;gap:12px;}.gyh-rename-section-title{margin:0;color:#263b5d;font-size:13px;font-weight:700;line-height:20px;}.gyh-rename-section-hint{color:#8491a5;font-size:11px;line-height:17px;}.gyh-rename-modes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;}.gyh-rename-mode{min-height:34px;padding:5px 7px;color:#5e6f87;background:#f7f9fc;border:1px solid transparent;border-radius:6px;cursor:pointer;font-size:12px;line-height:16px;white-space:nowrap;transition:background 160ms ease,border-color 160ms ease,color 160ms ease;}.gyh-rename-mode:hover{color:#2961d9;background:#f1f6ff;}.gyh-rename-mode.is-active{color:#2961d9;background:#edf5ff;border-color:#c9defa;font-weight:650;}.gyh-rename-mode:disabled{color:#a6b1c1;background:#f4f6f9;border-color:transparent;cursor:not-allowed;opacity:0.72;}.gyh-rename-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}.gyh-rename-field{min-width:0;position:relative;}.gyh-rename-field-label{position:absolute;top:-7px;left:9px;padding:0 4px;color:#8491a5;background:#ffffff;font-size:10px;line-height:14px;}.gyh-rename-input{width:100%;height:36px;padding:8px 10px;color:#263b5d;background:#ffffff;border:1px solid #dfe7f1;border-radius:7px;outline:0;font:inherit;font-size:12px;transition:border-color 160ms ease,box-shadow 160ms ease;}.gyh-rename-input:focus{border-color:#77a9ed;box-shadow:0 0 0 3px rgba(45,130,245,0.12);}.gyh-rename-input:disabled{color:#9aa6b7;background:#f5f7fa;border-color:#e4eaf2;cursor:not-allowed;}.gyh-rename-preview{overflow:hidden;border:1px solid #e7edf6;border-radius:9px;}.gyh-rename-preview-body{max-height:180px;overflow-x:hidden;}.gyh-rename-preview-head,.gyh-rename-row{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr) 44px;align-items:center;gap:8px;}.gyh-rename-preview-head{padding:6px 10px;color:#8491a5;background:#f8faff;font-size:10px;line-height:14px;}.gyh-rename-preview-head span:nth-child(3){color:#6f8fbd;}.gyh-rename-row{min-height:36px;padding:4px 10px;border-top:1px solid #eef2f7;font-size:11px;line-height:16px;}.gyh-rename-row-index{color:#8491a5;font-variant-numeric:tabular-nums;}.gyh-rename-row-name{min-width:0;overflow:hidden;color:#5e6f87;text-overflow:ellipsis;white-space:nowrap;}.gyh-rename-row-name.is-new{color:#2961d9;font-weight:600;}.gyh-rename-row-arrow{color:#a7b5c8;font-size:15px;text-align:center;}.gyh-rename-row-status{padding:2px 5px;color:#8491a5;background:#f4f6f9;border-radius:4px;font-size:10px;line-height:14px;text-align:center;white-space:nowrap;}.gyh-rename-row.is-processing .gyh-rename-row-status{color:#2961d9;background:#edf5ff;}.gyh-rename-row.is-success .gyh-rename-row-status{color:#27895f;background:#eaf8f1;}.gyh-rename-row.is-failed .gyh-rename-row-status{color:#d64545;background:#fff0f0;}.gyh-rename-row.is-processing{background:#f8faff;}.gyh-rename-row.is-success .gyh-rename-row-name.is-new{color:#27895f;}.gyh-rename-row.is-failed .gyh-rename-row-name.is-new{color:#d64545;}.gyh-rename-footer{padding:12px 20px;border-top:1px solid #edf1f7;display:flex;align-items:center;justify-content:space-between;gap:12px;}.gyh-rename-footer-note{color:#8491a5;font-size:11px;line-height:17px;}.gyh-rename-footer-actions{display:flex;align-items:center;gap:7px;}.gyh-rename-btn{min-width:70px;height:32px;padding:5px 12px;color:#66758c;background:#ffffff;border:1px solid #dce5f0;border-radius:7px;cursor:pointer;font:inherit;font-size:12px;line-height:20px;}.gyh-rename-btn-primary{color:#ffffff;background:#2961d9;border-color:#2961d9;cursor:not-allowed;opacity:0.58;}.gyh-rename-btn-primary:not(:disabled){cursor:pointer;opacity:1;}.gyh-rename-btn:hover:not(:disabled){color:#2961d9;border-color:#a9c9f4;background:#f6f9ff;}.gyh-rename-video-filter{color:#60718b;cursor:pointer;font-size:11px;line-height:17px;display:inline-flex;align-items:center;gap:5px;user-select:none;}.gyh-rename-video-filter input{width:13px;height:13px;margin:0;accent-color:#2961d9;cursor:pointer;}.gyh-toast{position:fixed;top:50%;left:50%;z-index:2147483003;width:max-content;max-width:calc(100vw - 32px);padding:9px 14px;color:#31445f;background:rgba(244,247,252,0.96);border:1px solid #dbe4f0;border-radius:8px;box-shadow:none;display:flex;align-items:center;gap:9px;font-size:13px;line-height:20px;pointer-events:none;backdrop-filter:blur(10px);transform:translate(-50%,-46%) scale(0.98);opacity:0;animation:gyh-toast-in 160ms ease forwards;}.gyh-toast-icon{width:20px;height:20px;flex:0 0 auto;color:#3f6ea8;background:transparent;border-radius:0;display:grid;place-items:center;}.gyh-toast-icon svg{width:18px;height:18px;}.gyh-toast-message{overflow:hidden;color:#31445f;font-size:13px;font-weight:500;line-height:20px;text-overflow:ellipsis;white-space:nowrap;}.gyh-toast.is-error{background:#fff3ee;border-color:#ffccbc;box-shadow:none;}.gyh-toast.is-error .gyh-toast-icon{color:#ff8a65;background:transparent;}.gyh-toast.is-error .gyh-toast-message{color:#b85c40;}.gyh-toast.is-success{background:rgba(239,249,243,0.97);border-color:#ccebd9;box-shadow:none;}.gyh-toast.is-success .gyh-toast-icon{color:#2f9c72;background:transparent;}.gyh-toast.is-success .gyh-toast-message{color:#276747;}@keyframes gyh-toast-in{to{opacity:1;transform:translate(-50%,-50%) scale(1);}}@keyframes gyh-toast-out{to{opacity:0;transform:translate(-50%,-55%) scale(0.96);}}@keyframes gyh-rename-fade-in{from{opacity:0;}to{opacity:1;}}@keyframes gyh-rename-rise-in{from{opacity:0;transform:translateY(8px) scale(0.985);}to{opacity:1;transform:translateY(0) scale(1);}}@media (max-width:640px){#${ROOT_ID}{right:14px;}.gyh-trigger{width:48px;height:48px;border-radius:14px;}.gyh-panel{right:58px;width:min(264px,calc(100vw - 86px));}.gyh-rename-overlay{padding:8px;}.gyh-rename-modal{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}.gyh-rename-header,.gyh-rename-body,.gyh-rename-footer{padding-left:10px;padding-right:10px;}.gyh-rename-modes{grid-template-columns:repeat(2,minmax(0,1fr));}.gyh-rename-fields{grid-template-columns:1fr;}.gyh-rename-footer{align-items:stretch;flex-direction:column;}.gyh-rename-footer-actions{justify-content:flex-end;}}#${ROOT_ID} .gyh-trigger-label{font-size:11px;}#${ROOT_ID} .gyh-panel-header{display:block;}#${ROOT_ID} .gyh-panel-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}#${ROOT_ID} .gyh-subtitle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;}#${ROOT_ID} .gyh-author{color:#9aa8ba;font-size:10px;white-space:nowrap;}#${ROOT_ID} .gyh-action:nth-child(4) .gyh-action-icon{color:#168476;background:#e7f7f3;}#${ROOT_ID} .gyh-submenu-heading{display:flex;align-items:center;gap:7px;min-width:0;}#${ROOT_ID} .gyh-submenu-back{width:24px;height:24px;flex:0 0 auto;padding:0;color:#5b86c6;background:#f1f6ff;border:1px solid #dce7f6;border-radius:6px;cursor:pointer;display:grid;place-items:center;}#${ROOT_ID} .gyh-submenu-back:hover{color:#2961d9;background:#e7f1ff;border-color:#c9defa;}#${ROOT_ID} .gyh-submenu-back svg{width:15px;height:15px;}#${ROOT_ID} .gyh-transfer-panel .gyh-action:nth-child(1) .gyh-action-icon{color:#168476;background:#e7f7f3;}#${ROOT_ID} .gyh-transfer-panel .gyh-action:nth-child(2) .gyh-action-icon{color:#9c5cab;background:#f6ebf8;}.gyh-movie-organizer-modal .gyh-rename-heading-icon{color:#2877de;background:#e8f2ff;}.gyh-tv-organizer-modal .gyh-rename-heading-icon{color:#8a63cc;background:#f2ecff;}.gyh-batch-rename-modal .gyh-rename-heading-icon{color:#de7a34;background:#fff1e8;}`;
-  const movieStyles = `.gyh-movie-modal{width:min(760px,calc(100vw - 32px));max-height:min(680px,calc(100vh - 32px))}.gyh-movie-key-modal{width:min(500px,calc(100vw - 32px));max-height:min(440px,calc(100vh - 32px))}.gyh-movie-key-note{padding:10px 12px;color:#536985;background:#f5f8fd;border:1px solid #e2eaf4;border-radius:8px;font-size:12px;line-height:18px}.gyh-movie-key-note strong{color:#263b5d}.gyh-movie-key-input{letter-spacing:.3px}.gyh-movie-key-status{min-height:15px;margin-top:5px;color:#8491a5;font-size:11px;line-height:15px}.gyh-movie-key-status.is-error{color:#b85c40}.gyh-movie-key-status.is-success{color:#8491a5}.gyh-movie-correct-count{color:#27895f}.gyh-movie-scope{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.gyh-movie-scope-item{min-width:0;padding:6px 9px;background:#f8faff;border:1px solid #e5edf8;border-radius:8px;display:flex;align-items:center;gap:7px}.gyh-movie-scope-label{display:inline;color:#8491a5;font-size:10px;line-height:16px;white-space:nowrap}.gyh-movie-scope-value{display:block;margin-top:0;min-width:0;color:#263b5d;font-size:12px;font-weight:650;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-rule-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.gyh-movie-rule-list{display:flex;flex-wrap:wrap;gap:5px}.gyh-movie-rule-options{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.gyh-movie-rule-token{height:26px;padding:0 6px;color:#2961d9;background:#edf5ff;border:1px solid #c9defa;border-radius:6px;display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:16px;cursor:grab;user-select:none;transition:background .15s,border-color .15s,opacity .15s,transform .15s}.gyh-movie-rule-token:active{cursor:grabbing}.gyh-movie-rule-token.is-dragging{opacity:.45;transform:scale(.98)}.gyh-movie-rule-token.is-drag-over{background:#dcecff;border-color:#8db8ee}.gyh-movie-rule-grip{width:12px;height:16px;color:#78a0d1;display:grid;place-items:center;pointer-events:none}.gyh-movie-rule-grip svg{width:11px;height:15px}.gyh-movie-rule-tool{width:18px;height:18px;margin-right:-3px;padding:0;color:#5b86c6;background:transparent;border:0;border-radius:4px;cursor:pointer;display:grid;place-items:center}.gyh-movie-rule-tool:hover{color:#2961d9;background:#dcecff}.gyh-movie-rule-tool:disabled{color:#aac2e0;background:transparent;cursor:not-allowed}.gyh-movie-rule-tool svg{width:12px;height:12px}.gyh-movie-rule-option{height:24px;padding:3px 8px;color:#60718b;background:#f7f9fc;border:1px solid #e3eaf3;border-radius:6px;cursor:pointer;font:inherit;font-size:11px;line-height:16px}.gyh-movie-rule-option:hover{color:#2961d9;background:#f1f6ff;border-color:#c9defa}.gyh-movie-rule-option.is-selected{color:#a5b0bf;background:#f4f6f9;border-color:#edf0f4;cursor:not-allowed}.gyh-movie-rule-preview{display:block;min-height:17px;margin-top:8px;overflow:hidden;color:#6f8fbd;font-size:11px;line-height:17px;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-preview-head,.gyh-movie-preview-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 76px;align-items:center;gap:8px}.gyh-movie-preview{overflow:hidden;border:1px solid #e7edf6;border-radius:9px}.gyh-movie-preview-head{padding:6px 10px;color:#8491a5;background:#f8faff;font-size:10px;line-height:14px}.gyh-movie-preview-body{max-height:220px}.gyh-movie-preview-row{min-height:38px;padding:5px 10px;border-top:1px solid #eef2f7;font-size:11px;line-height:16px}.gyh-movie-preview-name{min-width:0;overflow:hidden;color:#5e6f87;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-preview-match{min-width:0;overflow:hidden;color:#8491a5;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-preview-status{padding:2px 5px;color:#8491a5;background:#f4f6f9;border-radius:4px;font-size:10px;line-height:14px;text-align:center;white-space:nowrap}.gyh-movie-footer-note{flex:1;min-width:0;overflow:hidden;color:#8491a5;font-size:11px;line-height:17px;text-overflow:ellipsis;white-space:nowrap}.gyh-count-success{color:#27895f;font-weight:400}.gyh-count-failed{color:#d64545;font-weight:400}.gyh-movie-modal [data-tmdb-settings]{height:28px;padding:5px 10px}@media (max-width:640px){.gyh-movie-modal{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}.gyh-movie-key-modal{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}.gyh-movie-scope{grid-template-columns:1fr}.gyh-movie-preview-head,.gyh-movie-preview-row{grid-template-columns:minmax(0,1fr) 80px}}`;
+  const styles = ` #${ROOT_ID}{position:fixed;top:50%;right:22px;z-index:2147483000;transform:translateY(-50%);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}#${ROOT_ID} *,#${ROOT_ID} *::before,#${ROOT_ID} *::after{box-sizing:border-box;}.gyh-trigger{width:52px;height:52px;padding:0;color:#ffffff;background:linear-gradient(145deg,#2e82f5,#245fd2);border:1px solid rgba(255,255,255,0.35);border-radius:16px;box-shadow:0 10px 28px rgba(36,95,210,0.3),0 2px 7px rgba(18,51,106,0.18);cursor:pointer;display:grid;place-items:center;align-content:center;gap:1px;transition:transform 180ms ease,box-shadow 180ms ease,background 180ms ease;}.gyh-trigger:hover{background:linear-gradient(145deg,#4296ff,#2869e6);box-shadow:0 13px 32px rgba(36,95,210,0.36),0 3px 9px rgba(18,51,106,0.2);transform:translateY(-2px);}.gyh-trigger:focus-visible,.gyh-action:focus-visible{outline:3px solid rgba(45,130,245,0.35);outline-offset:3px;}.gyh-trigger svg{width:21px;height:21px;transition:transform 200ms ease;}.gyh-trigger-label{font-size:10px;font-weight:650;line-height:13px;letter-spacing:0;}.gyh-trigger[aria-expanded="true"] svg{transform:rotate(-10deg) scale(0.93);}.gyh-panel{position:absolute;top:50%;right:64px;width:264px;padding:14px;color:#17233a;background:rgba(255,255,255,0.96);border:1px solid rgba(213,225,241,0.92);border-radius:14px;box-shadow:0 18px 48px rgba(36,66,112,0.18),0 2px 8px rgba(36,66,112,0.08);opacity:0;pointer-events:none;transform:translateY(-50%) translateX(10px) scale(0.98);transform-origin:right center;transition:opacity 160ms ease,transform 160ms ease;}.gyh-panel::after{position:absolute;top:50%;right:-7px;width:12px;height:12px;content:"";background:#ffffff;border-top:1px solid rgba(213,225,241,0.92);border-right:1px solid rgba(213,225,241,0.92);transform:translateY(-50%) rotate(45deg);}.gyh-panel.is-open{opacity:1;pointer-events:auto;transform:translateY(-50%) translateX(0) scale(1);}.gyh-panel-header{display:flex;align-items:flex-start;justify-content:space-between;padding:3px 2px 12px;}.gyh-title{margin:0;font-size:15px;font-weight:700;line-height:21px;letter-spacing:0;}.gyh-subtitle{margin:2px 0 0;color:#8290a7;font-size:12px;line-height:17px;letter-spacing:0;}.gyh-status{padding:3px 7px;color:#2a78dd;background:#edf5ff;border-radius:5px;font-size:11px;font-weight:600;line-height:16px;white-space:nowrap;}.gyh-actions{display:grid;gap:7px;}.gyh-action{width:100%;height:48px;padding:5px 10px;text-align:left;color:#20304a;background:#f7faff;border:1px solid #e5edf8;border-radius:8px;cursor:pointer;display:grid;grid-template-columns:34px minmax(0,1fr) 17px;align-items:center;gap:9px;transition:background 160ms ease,border-color 160ms ease;}.gyh-action:hover{background:#f1f7ff;border-color:#c8def8;}.gyh-action-icon{width:34px;height:34px;color:#2877de;background:#e8f2ff;border-radius:8px;display:grid;place-items:center;}.gyh-action-icon svg{width:18px;height:18px;}.gyh-action:nth-child(2) .gyh-action-icon{color:#8a63cc;background:#f2ecff;}.gyh-action:nth-child(3) .gyh-action-icon{color:#de7a34;background:#fff1e8;}.gyh-action-name{display:block;font-size:13px;font-weight:650;line-height:18px;letter-spacing:0;}.gyh-action-note{display:block;margin-top:1px;color:#8491a5;font-size:11px;line-height:15px;letter-spacing:0;}.gyh-action-arrow{color:#a6b4c8;font-size:18px;font-weight:400;line-height:18px;text-align:center;}.gyh-rename-overlay{position:fixed;inset:0;z-index:2147483001;padding:16px;background:rgba(19,32,53,0.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;animation:gyh-rename-fade-in 160ms ease;}.gyh-rename-modal{width:min(960px,calc(100vw - 32px));max-height:min(640px,calc(100vh - 32px));overflow:hidden;color:#17233a;background:#ffffff;border:1px solid rgba(213,225,241,0.96);border-radius:16px;box-shadow:0 24px 70px rgba(19,44,82,0.28),0 4px 14px rgba(19,44,82,0.12);display:flex;flex-direction:column;animation:gyh-rename-rise-in 180ms ease;}.gyh-rename-header{padding:10px;border-bottom:1px solid #edf1f7;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}.gyh-rename-heading{display:flex;align-items:center;gap:11px;min-width:0;}.gyh-rename-heading-icon{width:36px;height:36px;flex:0 0 auto;color:#2877de;background:#e8f2ff;border-radius:10px;display:grid;place-items:center;}.gyh-rename-heading-icon svg{width:19px;height:19px;}.gyh-rename-title{margin:0;font-size:16px;font-weight:700;line-height:22px;}.gyh-rename-subtitle{margin:2px 0 0;color:#8491a5;font-size:12px;line-height:17px;}.gyh-rename-close{width:30px;height:30px;flex:0 0 auto;padding:0;color:#8491a5;background:transparent;border:0;border-radius:7px;cursor:pointer;display:grid;place-items:center;transition:background 160ms ease,color 160ms ease;}.gyh-rename-close:hover{color:#263b5d;background:#f3f6fa;}.gyh-rename-close svg{width:17px;height:17px;}.gyh-rename-body{min-height:0;padding:10px;overflow-y:auto;}.gyh-rename-section{margin-top:12px;padding:10px;border:1px solid #e7edf6;border-radius:10px;}.gyh-rename-section:first-of-type{margin-top:0;}.gyh-rename-section-head{min-height:22px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between;gap:12px;}.gyh-rename-section-title{margin:0;color:#263b5d;font-size:13px;font-weight:700;line-height:20px;}.gyh-rename-section-hint{color:#8491a5;font-size:11px;line-height:17px;}.gyh-rename-modes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;}.gyh-rename-mode{min-height:34px;padding:5px 7px;color:#5e6f87;background:#f7f9fc;border:1px solid transparent;border-radius:6px;cursor:pointer;font-size:12px;line-height:16px;white-space:nowrap;transition:background 160ms ease,border-color 160ms ease,color 160ms ease;}.gyh-rename-mode:hover{color:#2961d9;background:#f1f6ff;}.gyh-rename-mode.is-active{color:#2961d9;background:#edf5ff;border-color:#c9defa;font-weight:650;}.gyh-rename-mode:disabled{color:#a6b1c1;background:#f4f6f9;border-color:transparent;cursor:not-allowed;opacity:0.72;}.gyh-rename-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}.gyh-rename-field{min-width:0;position:relative;}.gyh-rename-field-label{position:absolute;top:-7px;left:9px;padding:0 4px;color:#8491a5;background:#ffffff;font-size:10px;line-height:14px;}.gyh-rename-input{width:100%;height:36px;padding:8px 10px;color:#263b5d;background:#ffffff;border:1px solid #dfe7f1;border-radius:7px;outline:0;font:inherit;font-size:12px;transition:border-color 160ms ease,box-shadow 160ms ease;}.gyh-rename-input:focus{border-color:#77a9ed;box-shadow:0 0 0 3px rgba(45,130,245,0.12);}.gyh-rename-input:disabled{color:#9aa6b7;background:#f5f7fa;border-color:#e4eaf2;cursor:not-allowed;}.gyh-rename-preview{overflow:hidden;border:1px solid #e7edf6;border-radius:9px;}.gyh-rename-preview-body{max-height:180px;overflow-x:hidden;}.gyh-rename-preview-head,.gyh-rename-row{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr) 44px;align-items:center;gap:8px;}.gyh-rename-preview-head{padding:6px 10px;color:#8491a5;background:#f8faff;font-size:10px;line-height:14px;}.gyh-rename-preview-head span:nth-child(3){color:#6f8fbd;}.gyh-rename-row{min-height:36px;padding:4px 10px;border-top:1px solid #eef2f7;font-size:11px;line-height:16px;}.gyh-rename-row-index{color:#8491a5;font-variant-numeric:tabular-nums;}.gyh-rename-row-name{min-width:0;overflow:hidden;color:#5e6f87;text-overflow:ellipsis;white-space:nowrap;}.gyh-rename-row-name.is-new{color:#2961d9;font-weight:600;}.gyh-rename-row-arrow{color:#a7b5c8;font-size:15px;text-align:center;}.gyh-rename-row-status{padding:2px 5px;color:#8491a5;background:#f4f6f9;border-radius:4px;font-size:10px;line-height:14px;text-align:center;white-space:nowrap;}.gyh-rename-row.is-processing .gyh-rename-row-status{color:#2961d9;background:#edf5ff;}.gyh-rename-row.is-success .gyh-rename-row-status{color:#27895f;background:#eaf8f1;}.gyh-rename-row.is-failed .gyh-rename-row-status{color:#d64545;background:#fff0f0;}.gyh-rename-row.is-processing{background:#f8faff;}.gyh-rename-row.is-success .gyh-rename-row-name.is-new{color:#27895f;}.gyh-rename-row.is-failed .gyh-rename-row-name.is-new{color:#d64545;}.gyh-rename-footer{padding:12px 20px;border-top:1px solid #edf1f7;display:flex;align-items:center;justify-content:space-between;gap:12px;}.gyh-rename-footer-note{color:#8491a5;font-size:11px;line-height:17px;}.gyh-rename-footer-actions{display:flex;align-items:center;gap:7px;}.gyh-rename-btn{min-width:70px;height:32px;padding:5px 12px;color:#66758c;background:#ffffff;border:1px solid #dce5f0;border-radius:7px;cursor:pointer;font:inherit;font-size:12px;line-height:20px;}.gyh-rename-btn-primary{color:#ffffff;background:#2961d9;border-color:#2961d9;cursor:not-allowed;opacity:0.58;}.gyh-rename-btn-primary:not(:disabled){cursor:pointer;opacity:1;}.gyh-rename-btn:hover:not(:disabled){color:#2961d9;border-color:#a9c9f4;background:#f6f9ff;}.gyh-rename-video-filter{color:#60718b;cursor:pointer;font-size:11px;line-height:17px;display:inline-flex;align-items:center;gap:5px;user-select:none;}.gyh-rename-video-filter input{width:13px;height:13px;margin:0;accent-color:#2961d9;cursor:pointer;}.gyh-toast{position:fixed;top:50%;left:50%;z-index:2147483003;width:max-content;max-width:calc(100vw - 32px);padding:9px 14px;color:#31445f;background:rgba(244,247,252,0.96);border:1px solid #dbe4f0;border-radius:8px;box-shadow:none;display:flex;align-items:center;gap:9px;font-size:13px;line-height:20px;pointer-events:none;backdrop-filter:blur(10px);transform:translate(-50%,-46%) scale(0.98);opacity:0;animation:gyh-toast-in 160ms ease forwards;}.gyh-toast-icon{width:20px;height:20px;flex:0 0 auto;color:#3f6ea8;background:transparent;border-radius:0;display:grid;place-items:center;}.gyh-toast-icon svg{width:18px;height:18px;}.gyh-toast-message{overflow:hidden;color:#31445f;font-size:13px;font-weight:500;line-height:20px;text-overflow:ellipsis;white-space:nowrap;}.gyh-toast.is-error{background:#fff3ee;border-color:#ffccbc;box-shadow:none;}.gyh-toast.is-error .gyh-toast-icon{color:#ff8a65;background:transparent;}.gyh-toast.is-error .gyh-toast-message{color:#b85c40;}.gyh-toast.is-success{background:rgba(239,249,243,0.97);border-color:#ccebd9;box-shadow:none;}.gyh-toast.is-success .gyh-toast-icon{color:#2f9c72;background:transparent;}.gyh-toast.is-success .gyh-toast-message{color:#276747;}@keyframes gyh-toast-in{to{opacity:1;transform:translate(-50%,-50%) scale(1);}}@keyframes gyh-toast-out{to{opacity:0;transform:translate(-50%,-55%) scale(0.96);}}@keyframes gyh-rename-fade-in{from{opacity:0;}to{opacity:1;}}@keyframes gyh-rename-rise-in{from{opacity:0;transform:translateY(8px) scale(0.985);}to{opacity:1;transform:translateY(0) scale(1);}}@media (max-width:640px){#${ROOT_ID}{right:14px;}.gyh-trigger{width:48px;height:48px;border-radius:14px;}.gyh-panel{right:58px;width:min(264px,calc(100vw - 86px));}.gyh-rename-overlay{padding:8px;}.gyh-rename-modal{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}.gyh-rename-header,.gyh-rename-body,.gyh-rename-footer{padding-left:10px;padding-right:10px;}.gyh-rename-modes{grid-template-columns:repeat(2,minmax(0,1fr));}.gyh-rename-fields{grid-template-columns:1fr;}.gyh-rename-footer{align-items:stretch;flex-direction:column;}.gyh-rename-footer-actions{justify-content:flex-end;}}#${ROOT_ID} .gyh-trigger-label{font-size:11px;}#${ROOT_ID} .gyh-panel-header{display:block;}#${ROOT_ID} .gyh-panel-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}#${ROOT_ID} .gyh-subtitle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;}#${ROOT_ID} .gyh-author{color:#9aa8ba;font-size:10px;white-space:nowrap;}#${ROOT_ID} .gyh-action:nth-child(4) .gyh-action-icon{color:#168476;background:#e7f7f3;}#${ROOT_ID} .gyh-submenu-heading{display:flex;align-items:center;gap:7px;min-width:0;}#${ROOT_ID} .gyh-submenu-back{width:24px;height:24px;flex:0 0 auto;padding:0;color:#5b86c6;background:#f1f6ff;border:1px solid #dce7f6;border-radius:6px;cursor:pointer;display:grid;place-items:center;}#${ROOT_ID} .gyh-submenu-back:hover{color:#2961d9;background:#e7f1ff;border-color:#c9defa;}#${ROOT_ID} .gyh-submenu-back svg{width:15px;height:15px;}#${ROOT_ID} .gyh-transfer-panel .gyh-action:nth-child(1) .gyh-action-icon{color:#168476;background:#e7f7f3;}#${ROOT_ID} .gyh-transfer-panel .gyh-action:nth-child(2) .gyh-action-icon{color:#9c5cab;background:#f6ebf8;}.gyh-movie-organizer-modal .gyh-rename-heading-icon{color:#2877de;background:#e8f2ff;}.gyh-tv-organizer-modal .gyh-rename-heading-icon{color:#8a63cc;background:#f2ecff;}.gyh-batch-rename-modal .gyh-rename-heading-icon{color:#de7a34;background:#fff1e8;}`;
+  const movieStyles = `.gyh-movie-modal{width:min(960px,calc(100vw - 32px));max-height:min(680px,calc(100vh - 32px))}.gyh-movie-key-modal{width:min(500px,calc(100vw - 32px));max-height:min(440px,calc(100vh - 32px))}.gyh-movie-key-note{padding:10px 12px;color:#536985;background:#f5f8fd;border:1px solid #e2eaf4;border-radius:8px;font-size:12px;line-height:18px}.gyh-movie-key-note strong{color:#263b5d}.gyh-movie-key-input{letter-spacing:.3px}.gyh-movie-key-status{min-height:15px;margin-top:5px;color:#8491a5;font-size:11px;line-height:15px}.gyh-movie-key-status.is-error{color:#b85c40}.gyh-movie-key-status.is-success{color:#8491a5}.gyh-movie-correct-count{color:#27895f}.gyh-movie-scope{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.gyh-movie-scope-item{min-width:0;padding:6px 9px;background:#f8faff;border:1px solid #e5edf8;border-radius:8px;display:flex;align-items:center;gap:7px}.gyh-movie-scope-label{display:inline;color:#8491a5;font-size:10px;line-height:16px;white-space:nowrap}.gyh-movie-scope-value{display:block;margin-top:0;min-width:0;color:#263b5d;font-size:12px;font-weight:650;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-rule-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.gyh-movie-rule-list{display:flex;flex-wrap:wrap;gap:5px}.gyh-movie-rule-options{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.gyh-movie-rule-token{height:26px;padding:0 6px;color:#2961d9;background:#edf5ff;border:1px solid #c9defa;border-radius:6px;display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:16px;cursor:grab;user-select:none;transition:background .15s,border-color .15s,opacity .15s,transform .15s}.gyh-movie-rule-token:active{cursor:grabbing}.gyh-movie-rule-token.is-dragging{opacity:.45;transform:scale(.98)}.gyh-movie-rule-token.is-drag-over{background:#dcecff;border-color:#8db8ee}.gyh-movie-rule-grip{width:12px;height:16px;color:#78a0d1;display:grid;place-items:center;pointer-events:none}.gyh-movie-rule-grip svg{width:11px;height:15px}.gyh-movie-rule-tool{width:18px;height:18px;margin-right:-3px;padding:0;color:#5b86c6;background:transparent;border:0;border-radius:4px;cursor:pointer;display:grid;place-items:center}.gyh-movie-rule-tool:hover{color:#2961d9;background:#dcecff}.gyh-movie-rule-tool:disabled{color:#aac2e0;background:transparent;cursor:not-allowed}.gyh-movie-rule-tool svg{width:12px;height:12px}.gyh-movie-rule-option{height:24px;padding:3px 8px;color:#60718b;background:#f7f9fc;border:1px solid #e3eaf3;border-radius:6px;cursor:pointer;font:inherit;font-size:11px;line-height:16px}.gyh-movie-rule-option:hover{color:#2961d9;background:#f1f6ff;border-color:#c9defa}.gyh-movie-rule-option.is-selected{color:#a5b0bf;background:#f4f6f9;border-color:#edf0f4;cursor:not-allowed}.gyh-movie-rule-preview{display:block;min-height:17px;margin-top:8px;overflow:hidden;color:#6f8fbd;font-size:11px;line-height:17px;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-preview-head,.gyh-movie-preview-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 76px;align-items:center;gap:8px}.gyh-movie-preview{overflow:hidden;border:1px solid #e7edf6;border-radius:9px}.gyh-movie-preview-head{padding:6px 10px;color:#8491a5;background:#f8faff;font-size:10px;line-height:14px}.gyh-movie-preview-body{max-height:220px}.gyh-movie-preview-row{min-height:38px;padding:5px 10px;border-top:1px solid #eef2f7;font-size:11px;line-height:16px}.gyh-movie-preview-name{min-width:0;overflow:hidden;color:#5e6f87;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-preview-match{min-width:0;overflow:hidden;color:#8491a5;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-preview-status{padding:2px 5px;color:#8491a5;background:#f4f6f9;border-radius:4px;font-size:10px;line-height:14px;text-align:center;white-space:nowrap}.gyh-movie-footer-note{flex:1;min-width:0;overflow:hidden;color:#8491a5;font-size:11px;line-height:17px;text-overflow:ellipsis;white-space:nowrap}.gyh-count-success{color:#27895f;font-weight:400}.gyh-count-failed{color:#d64545;font-weight:400}.gyh-movie-modal [data-tmdb-settings]{height:28px;padding:5px 10px}@media (max-width:640px){.gyh-movie-modal{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}.gyh-movie-key-modal{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}.gyh-movie-scope{grid-template-columns:1fr}.gyh-movie-preview-head,.gyh-movie-preview-row{grid-template-columns:minmax(0,1fr) 80px}}`;
   const movieFolderModeStyles = `.gyh-movie-folder-mode{height:28px;margin-top:8px;width:100%;display:flex;align-items:center}.gyh-movie-folder-mode-options{width:100%;min-width:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.gyh-movie-folder-option{height:28px;min-width:0;padding:4px 9px;color:#60718b;background:#f8faff;border:1px solid #dce6f1;border-radius:5px;cursor:pointer;display:grid;grid-template-columns:12px minmax(0,1fr) auto;align-items:center;gap:5px;font-size:11px;line-height:16px;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}.gyh-movie-folder-option:hover{color:#2961d9;background:#f1f6ff;border-color:#bdd8f7}.gyh-movie-folder-option.is-selected{color:#2961d9;background:#edf5ff;border-color:#8db8ee}.gyh-movie-folder-option input{width:12px;height:12px;margin:0;accent-color:#2961d9}.gyh-movie-folder-option-text{min-width:0;overflow:hidden;font-size:11px;font-weight:600;line-height:16px;text-overflow:ellipsis}.gyh-movie-folder-option-note{min-width:0;overflow:hidden;color:#8a98ab;font-size:10px;font-weight:400;line-height:14px;text-align:right;text-overflow:ellipsis}.gyh-movie-folder-option.is-selected .gyh-movie-folder-option-note{color:#6f8fbd}@media(max-width:640px){.gyh-movie-folder-mode{height:auto}.gyh-movie-folder-mode-options{grid-template-columns:1fr;gap:4px}.gyh-movie-folder-option{height:28px}}`;
   const movieCorrectionStyles = `.gyh-movie-preview-correct{width:35px;height:22px;padding:0;color:#5b86c6;background:#f7faff;border:1px solid #dce7f6;border-radius:5px;cursor:pointer;font:inherit;font-size:10px;line-height:14px;white-space:nowrap}.gyh-movie-preview-correct:hover{color:#2961d9;background:#edf5ff;border-color:#c9defa}.gyh-movie-preview-body.is-organizing .gyh-movie-preview-correct{display:none}.gyh-movie-preview-body.is-organizing .gyh-movie-preview-match{grid-column:span 2}.gyh-movie-correct-modal{width:min(430px,calc(100vw - 32px))}.gyh-movie-correct-modal .gyh-rename-body{overflow:hidden}.gyh-movie-correct-results{max-height:138px;margin-top:8px;padding-right:12px;overflow-y:scroll;scrollbar-gutter:stable;display:grid;gap:5px}.gyh-movie-correct-results::-webkit-scrollbar{width:8px}.gyh-movie-correct-results::-webkit-scrollbar-track{background:#f1f5fa;border-radius:8px}.gyh-movie-correct-results::-webkit-scrollbar-thumb{background:#c3d2e4;border:2px solid #f1f5fa;border-radius:8px;background-clip:padding-box}.gyh-movie-correct-option{width:100%;min-height:42px;padding:5px 8px;color:#536985;background:#f8faff;border:1px solid #e2eaf4;border-radius:7px;cursor:pointer;font:inherit;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}.gyh-movie-correct-option:hover{background:#f1f6ff;border-color:#c9defa}.gyh-movie-correct-option.is-selected{color:#2961d9;background:#edf5ff;border-color:#8db8ee}.gyh-movie-correct-option-main{min-width:0;display:grid;gap:1px}.gyh-movie-correct-option-title{display:block;overflow:hidden;color:inherit;font-size:12px;font-weight:650;line-height:15px;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-correct-option-original{display:block;overflow:hidden;color:#8491a5;font-size:10px;line-height:13px;text-overflow:ellipsis;white-space:nowrap}.gyh-movie-correct-option-year{padding:2px 5px;color:#6f8fbd;background:#ffffff;border:1px solid #dce7f6;border-radius:4px;font-size:10px;line-height:14px;white-space:nowrap}.gyh-movie-correct-option.is-selected .gyh-movie-correct-option-year{color:#2961d9;border-color:#b8d3f5}`;
   const tvStyles = `.gyh-tv-preview-target{width:100%;padding:0;color:#2961d9;background:transparent;border:0;cursor:pointer;font:inherit;text-align:left}.gyh-tv-preview-target:hover{color:#1f55c5;text-decoration:underline}.gyh-tv-preview-target:disabled{color:#8491a5;cursor:default;text-decoration:none}.gyh-movie-preview-body.is-organizing .gyh-tv-preview-target{grid-column:span 2}`;
   const rapidTransferStyles = `.gyh-rapid-import-modal,.gyh-rapid-export-modal{width:min(720px,calc(100vw - 32px));max-height:min(660px,calc(100vh - 32px))}.gyh-rapid-import-modal .gyh-rename-heading-icon{color:#168476;background:#e7f7f3}.gyh-rapid-export-modal .gyh-rename-heading-icon,.gyh-rapid-export-progress-modal .gyh-rename-heading-icon{color:#9c5cab;background:#f6ebf8}.gyh-rapid-import-file-row{height:15px;min-height:15px;margin-bottom:5px;display:flex;align-items:center;gap:8px}.gyh-rapid-import-tools{display:flex;align-items:center;gap:6px}.gyh-rapid-import-file-button{height:28px;min-width:0;padding:4px 10px;line-height:18px;display:inline-flex;align-items:center;gap:5px}.gyh-rapid-import-file-button svg{width:14px;height:14px}.gyh-rapid-import-file-button.is-disabled,.gyh-rapid-import-clear:disabled{color:#a6b1c1;background:#f4f6f9;border-color:#e4eaf2;cursor:not-allowed;pointer-events:none}.gyh-rapid-import-file-input{display:none}.gyh-rapid-import-file-name{min-width:0;overflow:hidden;color:#8491a5;font-size:11px;line-height:15px;text-overflow:ellipsis;white-space:nowrap}.gyh-rapid-import-editor,.gyh-rapid-export-code{height:300px;overflow:hidden;border:1px solid #dfe7f1;border-radius:8px}.gyh-rapid-import-editor:focus-within{border-color:#77a9ed;box-shadow:0 0 0 3px rgba(45,130,245,.12)}.gyh-rapid-import-editor .ace_scrollbar::-webkit-scrollbar,.gyh-rapid-export-code .ace_scrollbar::-webkit-scrollbar{width:8px;height:8px}.gyh-rapid-import-editor .ace_scrollbar::-webkit-scrollbar-track,.gyh-rapid-export-code .ace_scrollbar::-webkit-scrollbar-track{background:transparent}.gyh-rapid-import-editor .ace_scrollbar::-webkit-scrollbar-thumb,.gyh-rapid-export-code .ace_scrollbar::-webkit-scrollbar-thumb{background:#c3d2e4;border:2px solid transparent;border-radius:8px;background-clip:padding-box}.gyh-rapid-import-editor .ace_scrollbar::-webkit-scrollbar-thumb:hover,.gyh-rapid-export-code .ace_scrollbar::-webkit-scrollbar-thumb:hover{background:#9fb8d5;border:2px solid transparent;background-clip:padding-box}.gyh-rapid-import-fallback,.gyh-rapid-export-fallback{width:100%;height:100%;padding:10px;color:#263b5d;background:#fafcff;border:0;outline:0;resize:none;font:12px/18px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}.gyh-rapid-import-modal .ace_editor,.gyh-rapid-export-modal .ace_editor{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace!important;font-size:12px!important;line-height:18px!important}.gyh-rapid-import-progress{overflow:hidden;border:1px solid #e7edf6;border-radius:9px}.gyh-rapid-import-progress-head,.gyh-rapid-import-progress-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) 44px;align-items:center;gap:8px}.gyh-rapid-import-progress-head{padding:6px 10px;color:#8491a5;background:#f8faff;font-size:10px;line-height:14px}.gyh-rapid-import-progress-head span:nth-child(2){color:#6f8fbd}.gyh-rapid-import-progress-body{max-height:300px;overflow-x:hidden}.gyh-rapid-import-progress-row{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) 44px}.gyh-rapid-import-progress-directory,.gyh-rapid-import-progress-file{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gyh-rapid-import-progress-directory{color:#5e6f87}.gyh-rapid-import-progress-file{color:#2961d9;font-weight:600}.gyh-rapid-import-progress-row.is-success .gyh-rapid-import-progress-file{color:#27895f}.gyh-rapid-import-progress-row.is-failed .gyh-rapid-import-progress-file{color:#d64545}.gyh-rapid-export-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.gyh-rapid-export-summary-item{min-width:0;padding:7px 9px;background:#f8faff;border:1px solid #e5edf8;border-radius:8px}.gyh-rapid-export-summary-label{display:block;color:#8491a5;font-size:10px;line-height:15px}.gyh-rapid-export-summary-value{display:block;overflow:hidden;color:#263b5d;font-size:12px;font-weight:650;line-height:17px;text-overflow:ellipsis;white-space:nowrap}.gyh-rapid-export-note{color:#8491a5;font-size:11px;line-height:17px}.gyh-rapid-export-progress-modal{width:min(390px,calc(100vw - 32px));max-height:min(340px,calc(100vh - 32px))}.gyh-rapid-export-progress-main{padding:26px 14px 24px;text-align:center}.gyh-rapid-export-spinner{width:42px;height:42px;margin:0 auto 15px;border:3px solid #eee2f2;border-top-color:#9c5cab;border-radius:50%;display:block;animation:gyh-rapid-export-spin .8s linear infinite}.gyh-rapid-export-progress-title{margin:0;color:#263b5d;font-size:14px;font-weight:700;line-height:21px}.gyh-rapid-export-progress-text{min-height:18px;margin:5px 0 0;color:#6f8fbd;font-size:12px;line-height:18px}.gyh-rapid-export-progress-count{min-height:16px;margin:3px 0 0;color:#8491a5;font-size:11px;line-height:16px}.gyh-rapid-export-progress-modal .gyh-rename-footer{justify-content:center;padding:9px 14px}.gyh-rapid-export-progress-note{color:#8491a5;font-size:11px;line-height:17px}@keyframes gyh-rapid-export-spin{to{transform:rotate(360deg)}}@media(max-width:640px){.gyh-rapid-import-progress-head,.gyh-rapid-import-progress-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px}.gyh-rapid-export-summary{grid-template-columns:1fr}}`;
-  const searchStyles = `.gyh-search-modal{width:min(760px,calc(100vw - 32px));max-height:min(680px,calc(100vh - 32px))}#${ROOT_ID} .gyh-action[data-action="search"] .gyh-action-icon{color:#16a34a;background:#e8f7ee}.gyh-search-bar{display:flex;align-items:center;gap:7px}.gyh-search-input{height:36px}.gyh-search-btn{height:36px;min-width:78px;color:#ffffff;background:#2961d9;border-color:#2961d9}.gyh-search-btn:hover:not(:disabled){color:#ffffff;background:#1f55c5;border-color:#1f55c5}.gyh-search-btn:disabled{color:#a6b1c1;background:#f4f6f9;border-color:#e4eaf2;cursor:not-allowed}.gyh-search-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.gyh-search-tabs[hidden]{display:none}.gyh-search-tab{height:26px;padding:3px 11px;color:#60718b;background:#f7f9fc;border:1px solid #e3eaf3;border-radius:13px;cursor:pointer;font:inherit;font-size:11px;line-height:18px;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}.gyh-search-tab:hover{color:#2961d9;background:#f1f6ff;border-color:#c9defa}.gyh-search-tab.is-active{color:#ffffff;font-weight:650}.gyh-search-results{margin-top:10px;min-height:190px;max-height:52vh;display:grid;gap:7px;align-content:start;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#b7c8de transparent}.gyh-search-results::-webkit-scrollbar{width:8px}.gyh-search-results::-webkit-scrollbar-track{background:transparent}.gyh-search-results::-webkit-scrollbar-thumb{background:#c3d2e4;border:2px solid transparent;border-radius:8px;background-clip:padding-box}.gyh-search-empty{padding:48px 20px;color:#8491a5;text-align:center;font-size:12px;line-height:20px}.gyh-search-empty span{font-size:11px}.gyh-search-card{padding:10px 12px;border:1px solid #e7edf6;border-radius:9px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s}.gyh-search-card:hover{border-color:#9dc0f2;box-shadow:0 2px 8px rgba(45,130,245,.12)}.gyh-search-card-main{min-width:0;flex:1}.gyh-search-card-title{margin-bottom:5px;color:#263b5d;font-size:13px;font-weight:650;line-height:18px;word-break: break-word;}.gyh-search-card-meta{display:flex;flex-wrap:wrap;align-items:center;gap:7px;color:#8491a5;font-size:11px;line-height:16px}.gyh-search-source{padding:1px 7px;color:#2961d9;background:#edf5ff;border-radius:4px}.gyh-search-password{color:#d64545}.gyh-search-card-actions{display:flex;flex:0 0 auto;gap:6px}.gyh-search-card-btn{height:26px;padding:3px 11px;color:#60718b;background:#ffffff;border:1px solid #dce5f0;border-radius:6px;cursor:pointer;font:inherit;font-size:11px;line-height:18px;white-space:nowrap;transition:color .15s,border-color .15s,background .15s}.gyh-search-card-btn:hover{color:#2961d9;border-color:#a9c9f4;background:#f6f9ff}.gyh-search-card-btn.is-copied{color:#27895f;border-color:#a8ddc2;background:#eaf8f1}.gyh-search-card-btn.is-cloud{color:#2961d9;border-color:#c9defa;background:#edf5ff}@media(max-width:640px){.gyh-search-card{flex-direction:column}.gyh-search-card-actions{width:100%;justify-content:flex-end}}`;
+  const searchStyles = `.gyh-search-modal{width:min(960px,calc(100vw - 32px));max-height:min(680px,calc(100vh - 32px))}#${ROOT_ID} .gyh-action[data-action="search"] .gyh-action-icon{color:#16a34a;background:#e8f7ee}.gyh-search-bar{display:flex;align-items:center;gap:7px}.gyh-search-input{height:36px}.gyh-search-btn{height:36px;min-width:78px;color:#ffffff;background:#2961d9;border-color:#2961d9}.gyh-search-btn:hover:not(:disabled){color:#ffffff;background:#1f55c5;border-color:#1f55c5}.gyh-search-btn:disabled{color:#a6b1c1;background:#f4f6f9;border-color:#e4eaf2;cursor:not-allowed}.gyh-search-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.gyh-search-tabs[hidden]{display:none}.gyh-search-tab{height:26px;padding:3px 11px;color:#60718b;background:#f7f9fc;border:1px solid #e3eaf3;border-radius:13px;cursor:pointer;font:inherit;font-size:11px;line-height:18px;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}.gyh-search-tab:hover{color:#2961d9;background:#f1f6ff;border-color:#c9defa}.gyh-search-tab.is-active{color:#ffffff;font-weight:650}.gyh-search-results{margin-top:10px;min-height:190px;max-height:52vh;display:grid;gap:7px;align-content:start;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#b7c8de transparent}.gyh-search-results::-webkit-scrollbar{width:8px}.gyh-search-results::-webkit-scrollbar-track{background:transparent}.gyh-search-results::-webkit-scrollbar-thumb{background:#c3d2e4;border:2px solid transparent;border-radius:8px;background-clip:padding-box}.gyh-search-empty{padding:48px 20px;color:#8491a5;text-align:center;font-size:12px;line-height:20px}.gyh-search-empty span{font-size:11px}.gyh-search-card{padding:10px 12px;border:1px solid #e7edf6;border-radius:9px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s}.gyh-search-card:hover{border-color:#9dc0f2;box-shadow:0 2px 8px rgba(45,130,245,.12)}.gyh-search-card-main{min-width:0;flex:1}.gyh-search-card-title{margin-bottom:5px;color:#263b5d;font-size:13px;font-weight:650;line-height:18px;word-break: break-word;}.gyh-search-card-meta{display:flex;flex-wrap:wrap;align-items:center;gap:7px;color:#8491a5;font-size:11px;line-height:16px}.gyh-search-source{padding:1px 7px;color:#2961d9;background:#edf5ff;border-radius:4px}.gyh-search-password{color:#d64545}.gyh-search-card-actions{display:flex;flex:0 0 auto;gap:6px}.gyh-search-card-btn{height:26px;padding:3px 11px;color:#60718b;background:#ffffff;border:1px solid #dce5f0;border-radius:6px;cursor:pointer;font:inherit;font-size:11px;line-height:18px;white-space:nowrap;transition:color .15s,border-color .15s,background .15s}.gyh-search-card-btn:hover{color:#2961d9;border-color:#a9c9f4;background:#f6f9ff}.gyh-search-card-btn.is-copied{color:#27895f;border-color:#a8ddc2;background:#eaf8f1}.gyh-search-card-btn.is-cloud{color:#2961d9;border-color:#c9defa;background:#edf5ff}@media(max-width:640px){.gyh-search-card{flex-direction:column}.gyh-search-card-actions{width:100%;justify-content:flex-end}}`;
   const componentStyles = `.gyh-organizer-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 35px 44px}.gyh-organizer-grid-head span:nth-child(2){grid-column:span 2}.gyh-movie-scope-item{height:34px}.gyh-movie-scope-value{margin-left:auto;text-align:right}.gyh-movie-modal [data-tmdb-settings]{line-height:16px}.gyh-preview-two-column{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.gyh-preview-single-column{grid-template-columns:1fr}.gyh-preview-compact{max-height:160px}.gyh-movie-key-field{display:block;margin-top:12px}.gyh-rule-section-head{justify-content:flex-start;gap:10px}.gyh-rule-section-head .gyh-movie-rule-head{flex:1;min-width:0;justify-content:flex-start}.gyh-rule-section-head .gyh-movie-rule-preview{min-width:0;margin-top:0;flex:1;text-align:left}.gyh-rename-body,.gyh-rename-preview-body,.gyh-movie-preview-body,.gyh-rapid-import-progress-body{overflow-y:auto;scrollbar-width:thin;scrollbar-color:#b7c8de transparent}.gyh-rename-body::-webkit-scrollbar,.gyh-rename-preview-body::-webkit-scrollbar,.gyh-movie-preview-body::-webkit-scrollbar,.gyh-rapid-import-progress-body::-webkit-scrollbar{width:8px}.gyh-rename-body::-webkit-scrollbar-track,.gyh-rename-preview-body::-webkit-scrollbar-track,.gyh-movie-preview-body::-webkit-scrollbar-track,.gyh-rapid-import-progress-body::-webkit-scrollbar-track{background:transparent}.gyh-rename-body::-webkit-scrollbar-thumb,.gyh-rename-preview-body::-webkit-scrollbar-thumb,.gyh-movie-preview-body::-webkit-scrollbar-thumb,.gyh-rapid-import-progress-body::-webkit-scrollbar-thumb{background:#c3d2e4;border:2px solid transparent;border-radius:8px;background-clip:padding-box}.gyh-rename-body::-webkit-scrollbar-thumb:hover,.gyh-rename-preview-body::-webkit-scrollbar-thumb:hover,.gyh-movie-preview-body::-webkit-scrollbar-thumb:hover,.gyh-rapid-import-progress-body::-webkit-scrollbar-thumb:hover{background:#9fb8d5;border:2px solid transparent;background-clip:padding-box}.gyh-toast.is-leaving{animation:gyh-toast-out 180ms ease forwards}.gyh-overlay-elevated{z-index:2147483002}.gyh-fields-two-column{grid-template-columns:repeat(2,minmax(0,1fr))}.gyh-is-hidden{display:none!important}.gyh-copy-buffer{position:fixed;opacity:0;pointer-events:none}.gyh-editor-readonly .ace_cursor{opacity:0!important}`;
 
   // 注入组件样式
@@ -417,9 +417,9 @@
     const extensionMatch = cleanName.match(/(\.[^.]+)$/);
     const extension = extensionMatch ? extensionMatch[1] : '';
     const base = extension ? cleanName.slice(0, -extension.length) : cleanName;
-    const yearMatch = [...base.matchAll(/(?:19|20)\d{2}/g)].filter(match => Number(match[0]) <= new Date().getFullYear() + 1).at(-1);
+    const yearMatch = [...base.matchAll(/(?<!\d)(?:19|20)\d{2}(?!\d)/g)].filter(match => Number(match[0]) <= new Date().getFullYear() + 1).at(-1);
     const year = yearMatch ? yearMatch[0] : '';
-    const beforeYear = yearMatch ? base.slice(0, yearMatch.index) : base;
+    const beforeYear = yearMatch ? base.slice(0, yearMatch.index).replace(/[\s\(\[\{（【]+$/, '') : base;
     const parentName = path.length ? path[path.length - 1] : '';
     const parentHint = extractMovieTitleHint(parentName);
     const collectionFolder = options.preferFileTitle === true || path.some(isMovieCollectionFolder);
@@ -477,6 +477,7 @@
   // 获取最佳 TMDB 电影候选
   async function searchTmdbMovie(info, options = {}) {
     const candidates = await searchTmdbMovieCandidates(info, options);
+    console.log('TMDB 电影候选:', candidates);
     return candidates?.[0] || null;
   }
   // 获取 TMDB 电影的全部上映年份
@@ -498,24 +499,21 @@
     if (!years.length) return match;
     return { ...match, resolvedYear: years.includes(String(info.year)) ? String(info.year) : years[0] };
   }
-  // 提取剧集的季集编号
+  // 提取剧集的季集编号和分段标记
   function extractTvSeasonEpisode(value) {
     const text = String(value || '').replace(/[【】[\](){}]/g, '.');
-    const seasonEpisodeMatch = text.match(/(?:^|[.\s_-])s(\d{1,2})[.\s_-]?e(\d{1,3})(?:$|[.\s_-])/i) || text.match(/第\s*(\d{1,2})\s*季\D{0,8}第?\s*(\d{1,3})\s*集/i);
-    const episodeOnlyMatch = text.match(/(?:^|[.\s_-])(?:e|ep|episode)[.\s_-]?(\d{1,3})(?:$|[.\s_-])/i);
-    const bareEpisodeText = text.replace(/\.[^.]+$/, '');
-    const bareEpisodeMatch = bareEpisodeText.match(/(?:^|[.\s_-])(\d{1,3})$/);
-    const episode = seasonEpisodeMatch?.[2] || episodeOnlyMatch?.[1] || bareEpisodeMatch?.[1] || '';
-    if (!episode) return { season: '', episode: '', label: '' };
-    const season = String(Number(seasonEpisodeMatch?.[1] || 1)).padStart(2, '0');
-    const normalizedEpisode = String(Number(episode)).padStart(2, '0');
-    return { season, episode: normalizedEpisode, label: 'S' + season + 'E' + normalizedEpisode };
+    const match = text.match(/(?:^|[.\s_-])s(\d{1,2})[.\s_-]?e(\d{1,3})(?:[.\s_-]+part[.\s_-]?(\d+))?(?:$|[.\s_-])/i);
+    if (!match) return { season: '', episode: '', label: '' };
+    const season = String(Number(match[1])).padStart(2, '0');
+    const episode = String(Number(match[2])).padStart(2, '0');
+    const part = match[3] ? 'Part' + Number(match[3]) : '';
+    return { season, episode, part, label: 'S' + season + 'E' + episode + (part ? '.' + part : '') };
   }
   // 提取剧集剧名
   function extractTvTitle(value) {
     const source = stripMovieSiteTags(value).replace(/【[^】]*】/g, ' ');
     const text = source.replace(/\[[^\]]*\]|（[^）]*）|\([^)]*\)|『[^』]*』|「[^」]*」/g, ' ').replace(/(?:^|[.\s_-])s\d{1,2}(?:[.\s_-]?e\d{1,3})?(?:$|[.\s_-]).*$/i, ' ');
-    const chinese = text.match(/[\u4e00-\u9fff][\u4e00-\u9fff·\d：]*/g)?.map(item => item.trim()).filter(item => item.length > 1 && !/(?:高清|剧集|发布|国语|配音|字幕|音轨|全集|更新|视频|帧率|版本|杜比|视界|高码|蓝光|原盘|码率|内嵌|简繁|中字|特效)/.test(item)) || [];
+    const chinese = text.match(/[\u4e00-\u9fff][\u4e00-\u9fff\u2160-\u217f·\d：]*/g)?.map(item => item.trim()).filter(item => item.length > 1 && !/(?:高清|剧集|发布|国语|配音|字幕|音轨|全集|更新|视频|帧率|版本|杜比|视界|高码|蓝光|原盘|码率|内嵌|简繁|中字|特效)/.test(item)) || [];
     if (chinese.length) return chinese.sort((a, b) => b.length - a.length)[0];
     return extractMovieTitleHint(source) || parseMovieName(source).title;
   }
@@ -606,6 +604,16 @@
   // 移动单个光鸭资源
   async function moveGuangyaFile(fileId, parentId) {
     return moveGuangyaFiles([fileId], parentId);
+  }
+  // 删除光鸭文件/文件夹（移至回收站）
+  async function deleteGuangyaFiles(fileIds) {
+    const ids = [...new Set(fileIds.map(id => String(id || '')).filter(Boolean))];
+    if (!ids.length) return;
+    const response = await requestGuangyaApi(`${API.guangya}/userres/v1/file/delete_file`, { fileIds: ids });
+    const message = response?.msg || response?.data?.msg;
+    if (message && message !== 'success') throw new Error(message);
+    await waitGuangyaTask(response, '删除文件');
+    return response;
   }
   // 读取光鸭登录令牌
   function getGuangyaAuthToken() {
@@ -1807,7 +1815,7 @@
     requiredFields.slice().reverse().forEach(field => { if (!state.fields.includes(field)) state.fields.unshift(field); });
     const persist = () => { if (storageKey) setStoredValue(storageKey, [...state.fields]); };
     section.className = 'gyh-rename-section';
-    section.innerHTML = '<div class="gyh-rename-section-head gyh-rule-section-head"><h3 class="gyh-rename-section-title">命名规则</h3><div class="gyh-movie-rule-head"><span class="gyh-movie-rule-preview" data-movie-rule-preview></span></div></div><div class="gyh-movie-rule-list" data-movie-rule-list></div><div class="gyh-movie-rule-options" data-movie-rule-options></div>' + (showFolderMode ? '<div class="gyh-movie-folder-mode" data-movie-folder-mode><div class="gyh-movie-folder-mode-options"><label class="gyh-movie-folder-option is-selected"><input type="radio" name="gyh-movie-folder-mode" value="shared" checked><span class="gyh-movie-folder-option-text">所有影片整理到一个文件夹</span><small class="gyh-movie-folder-option-note">统一归入“整理完成”目录</small></label><label class="gyh-movie-folder-option"><input type="radio" name="gyh-movie-folder-mode" value="separate"><span class="gyh-movie-folder-option-text">每部影片都使用独立文件夹</span><small class="gyh-movie-folder-option-note">按影片名称分别创建目录</small></label></div></div>' : '');
+    section.innerHTML = '<div class="gyh-rename-section-head gyh-rule-section-head"><h3 class="gyh-rename-section-title">命名规则</h3><div class="gyh-movie-rule-head"><span class="gyh-movie-rule-preview" data-movie-rule-preview></span></div></div><div class="gyh-movie-rule-list" data-movie-rule-list></div><div class="gyh-movie-rule-options" data-movie-rule-options></div>' + (showFolderMode ? '<div class="gyh-movie-folder-mode" data-movie-folder-mode><div class="gyh-movie-folder-mode-options"><label class="gyh-movie-folder-option"><input type="radio" name="gyh-movie-folder-mode" value="shared"><span class="gyh-movie-folder-option-text">所有影片整理到一个文件夹</span><small class="gyh-movie-folder-option-note">统一归入“整理完成”目录</small></label><label class="gyh-movie-folder-option is-selected"><input type="radio" name="gyh-movie-folder-mode" value="separate" checked><span class="gyh-movie-folder-option-text">每部影片都使用独立文件夹</span><small class="gyh-movie-folder-option-note">按影片名称分别创建目录</small></label></div></div>' : '');
     const list = section.querySelector('[data-movie-rule-list]');
     const options = section.querySelector('[data-movie-rule-options]');
     const preview = section.querySelector('[data-movie-rule-preview]');
@@ -1841,7 +1849,7 @@
     }
     section.getMovieNamingRule = () => ({
       fields: [...state.fields],
-      folderMode: showFolderMode ? section.querySelector('input[name="gyh-movie-folder-mode"]:checked')?.value || 'shared' : 'shared',
+      folderMode: showFolderMode ? section.querySelector('input[name="gyh-movie-folder-mode"]:checked')?.value || 'separate' : 'separate',
     });
     render();
     return section;
@@ -1858,14 +1866,41 @@
   function buildMovieName(info, match, rule) {
     return buildMediaName('movie', info, match, rule);
   }
-  function buildMediaFolderName(info, match) {
+  // 生成整理目标文件夹名（剧名 (年份) {tmdb-id}）
+  function buildMediaFolderName(info, match, type = 'movie') {
     const title = String(match?.title || info.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
     const tmdb = match?.id ? '{tmdb-' + match.id + '}' : '';
-    return [title, match?.resolvedYear || match?.year || info.year || '', tmdb].filter(Boolean).join('.');
+    const year = match?.resolvedYear || match?.year || info.year || '';
+    return [title, year ? `(${year})` : '', tmdb].filter(Boolean).join(' ');
   }
   // 获取当前季的首播年份
   function getTvSeasonYear(seasons, season, fallback = '') {
     return seasons.find(item => Number(item.season) === Number(season))?.year || fallback;
+  }
+  // 生成剧集季目录名
+  function getTvSeasonDirectoryName(season) {
+    const text = String(season || '').trim();
+    const value = Number(text);
+    return 'Season ' + (text && Number.isFinite(value) && value >= 0 ? value : 1);
+  }
+  // 标记扫描计划内重复的完整目标路径
+  function markDuplicateTvTargetPaths(plan) {
+    const targets = new Map();
+    plan.forEach(item => {
+      item.targetPathConflict = false;
+      if (!item.group?.match || !item.group.folderName || !item.newName) return;
+      const path = [item.group.folderName, getTvSeasonDirectoryName(item.info?.season), item.newName].join('/');
+      const items = targets.get(path) || [];
+      items.push(item);
+      targets.set(path, items);
+    });
+    const duplicates = new Set();
+    targets.forEach((items, path) => {
+      if (items.length < 2) return;
+      duplicates.add(path);
+      items.forEach(item => { item.targetPathConflict = true; });
+    });
+    return duplicates;
   }
   // 生成剧集单集目标名称
   function buildTvEpisodeName(info, match, rule) {
@@ -1877,7 +1912,11 @@
       isFile: resource => resource.resType === 1,
       getChildren: resource => getGuangyaFiles(resource.id),
       acceptFile: resource => isVideoFile(resource) && getMovieFileSize(resource) > MIN_MEDIA_SIZE,
-      mapFile: (resource, path) => ({ file: { ...resource, path }, sourceFolder: folder }),
+      nextPath: (path, resource) => [...path, resource],
+      mapFile: (resource, path) => {
+        const parentFolder = path.length > 0 ? path[path.length - 1] : folder;
+        return { file: { ...resource, path: path.map(item => item.name) }, sourceFolder: folder, parentFolder };
+      },
       onFolder: (resource, count) => onProgress?.(count),
     });
   }
@@ -1905,10 +1944,11 @@
   function renderTvPlan(previewBody, groups) {
     previewBody.innerHTML = groups.map(group => {
       const ready = (group.entries || []).filter(item => item.newName).length;
+      const hasConflict = (group.entries || []).some(item => item.targetPathConflict);
       const summary = formatTvSeasonSummary(group);
       const target = group.match ? group.folderName + (summary ? '｜' + summary : '') : '未匹配';
-      const status = group.match && ready ? (group.status || '待整理') : '已跳过';
-      return '<div class="gyh-movie-preview-row gyh-rename-row gyh-organizer-grid" data-tv-row="' + group.id + '"><span class="gyh-movie-preview-name" title="' + escapeHtml(group.folder.name) + '">' + escapeHtml(group.folder.name) + '</span><button class="gyh-tv-preview-target gyh-movie-preview-match gyh-rename-row-name is-new" type="button" data-tv-details="' + group.id + '" title="' + escapeHtml(target) + '">' + escapeHtml(target) + '</button><button class="gyh-movie-preview-correct" type="button" data-tv-correct="' + group.id + '">纠错</button><span class="gyh-movie-preview-status gyh-rename-row-status">' + escapeHtml(status) + '</span></div>';
+      const status = hasConflict ? '路径重复' : group.match && ready ? (group.status || '待整理') : '已跳过';
+      return '<div class="gyh-movie-preview-row gyh-rename-row gyh-organizer-grid' + (hasConflict ? ' is-failed' : '') + '" data-tv-row="' + group.id + '"><span class="gyh-movie-preview-name" title="' + escapeHtml(group.folder.name) + '">' + escapeHtml(group.folder.name) + '</span><button class="gyh-tv-preview-target gyh-movie-preview-match gyh-rename-row-name is-new" type="button" data-tv-details="' + group.id + '" title="' + escapeHtml(target) + '">' + escapeHtml(target) + '</button><button class="gyh-movie-preview-correct" type="button" data-tv-correct="' + group.id + '">纠错</button><span class="gyh-movie-preview-status gyh-rename-row-status">' + escapeHtml(status) + '</span></div>';
     }).join('');
   }
   // 刷新剧集文件夹处理状态
@@ -1924,16 +1964,18 @@
   // 渲染电影匹配预览
   function renderMoviePlan(previewBody, plan) {
     previewBody.innerHTML = plan.map((item, index) => {
-      const target = item.newName || (item.match ? item.match.title : '未匹配');
+      const sourcePath = [...(item.file.path || []), item.file.name].join('/');
+      const targetDir = item.match ? buildMediaFolderName(item.info, item.match) : '';
+      const target = item.newName ? (targetDir ? targetDir + '/' : '') + item.newName : (item.match ? item.match.title : '未匹配');
       const matchCell = '<span class="gyh-movie-preview-match gyh-rename-row-name is-new" title="' + escapeHtml(target) + '">' + escapeHtml(target) + '</span>';
       const correctButton = '<button class="gyh-movie-preview-correct" type="button" data-movie-correct="' + index + '">纠错</button>';
       const statusCell = '<span class="gyh-movie-preview-status gyh-rename-row-status">' + escapeHtml(item.status) + '</span>';
-      return '<div class="gyh-movie-preview-row gyh-rename-row gyh-organizer-grid" data-movie-row="' + index + '"><span class="gyh-movie-preview-name" title="' + escapeHtml(item.file.name) + '">' + escapeHtml(item.file.name) + '</span>' + matchCell + correctButton + statusCell + '</div>';
+      return '<div class="gyh-movie-preview-row gyh-rename-row gyh-organizer-grid" data-movie-row="' + index + '"><span class="gyh-movie-preview-name" title="' + escapeHtml(sourcePath) + '">' + escapeHtml(sourcePath) + '</span>' + matchCell + correctButton + statusCell + '</div>';
     }).join('');
   }
   // 执行电影整理任务
-  async function executeMoviePlan(overlay, previewBody, footerNote, startButton, plan, resources, folderMode = 'shared') {
-    const runnable = plan.filter(item => item.match && item.newName);
+  async function executeMoviePlan(overlay, previewBody, footerNote, startButton, plan, resources) {
+    const runnable = plan.filter(item => item.match && item.newName && item.status !== '已完成');
     if (!runnable.length) {
       showToast('没有可整理的匹配结果', 'error');
       return false;
@@ -1945,8 +1987,6 @@
     overlay.querySelector('.gyh-rename-close').disabled = true;
     overlay.querySelector('[data-movie-cancel]').disabled = true;
     const parentId = getCurrentGuangyaDirectoryId();
-    const useSeparateFolders = folderMode === 'separate';
-    const targetId = useSeparateFolders ? '' : await ensureMovieDirectory(parentId, '整理完成');
     const movieDirectoryIds = new Map();
     let success = 0;
     let failed = 0;
@@ -1956,18 +1996,22 @@
       if (row) revealRenameRow(previewBody, row);
       setPreviewRowState(row, 'processing', '整理中');
       try {
-        let itemTargetId = targetId;
-        if (useSeparateFolders) {
-          const directoryName = buildMediaFolderName(item.info, item.match);
-          if (!directoryName) throw new Error('无法生成影片目录名称');
-          itemTargetId = movieDirectoryIds.get(directoryName);
-          if (!itemTargetId) {
-            itemTargetId = await ensureMovieDirectory(parentId, directoryName);
-            movieDirectoryIds.set(directoryName, itemTargetId);
-          }
+        const directoryName = buildMediaFolderName(item.info, item.match);
+        if (!directoryName) throw new Error('无法生成影片目录名称');
+        let itemTargetId = movieDirectoryIds.get(directoryName);
+        if (!itemTargetId) {
+          itemTargetId = await ensureMovieDirectory(parentId, directoryName);
+          movieDirectoryIds.set(directoryName, itemTargetId);
         }
         if (item.file.name !== item.newName) await renameGuangyaFile(item.file.id, item.newName);
-        await moveGuangyaFile(item.file.id, itemTargetId);
+        try {
+          await moveGuangyaFile(item.file.id, itemTargetId);
+        } catch (moveError) {
+          let targetChildren = [];
+          try { targetChildren = await getGuangyaFiles(itemTargetId); } catch (listError) {}
+          const alreadyThere = targetChildren.some(child => String(child.id) === String(item.file.id) || child.name === item.newName);
+          if (!alreadyThere) throw moveError;
+        }
         item.status = '已整理';
         setPreviewRowState(row, 'success', '已整理');
         success += 1;
@@ -1978,21 +2022,13 @@
       }
       if (index < runnable.length - 1) await delay(0);
     }
-    const sourceFolders = resources.filter(resource => resource.resType !== 1 && resource.name !== '整理完成' && resource.name !== '残留文件');
-    let residualSuccess = 0;
+    const targetDirIds = new Set([...movieDirectoryIds.values()].map(id => String(id)));
+    const sourceFolders = resources.filter(resource => resource.resType !== 1 && resource.name !== '整理完成' && resource.name !== '残留文件' && !targetDirIds.has(String(resource.id)));
     let residualFailed = 0;
-    if (sourceFolders.length) {
-      footerNote.textContent = '正在移动残留文件';
+    if (sourceFolders.length && !failed) {
+      footerNote.textContent = '正在清理源文件夹';
       try {
-        const residualId = await ensureMovieDirectory(parentId, '残留文件');
-        try {
-          await moveGuangyaFiles(sourceFolders.map(folder => folder.id), residualId);
-          residualSuccess = sourceFolders.length;
-        } catch (error) {
-          for (const folder of sourceFolders) {
-            try { await moveGuangyaFile(folder.id, residualId); residualSuccess += 1; } catch (moveError) { residualFailed += 1; }
-          }
-        }
+        await deleteGuangyaFiles(sourceFolders.map(folder => folder.id));
       } catch (error) {
         residualFailed = sourceFolders.length;
       }
@@ -2002,7 +2038,7 @@
     overlay.querySelector('.gyh-rename-close').disabled = false;
     overlay.querySelector('[data-movie-cancel]').disabled = false;
     overlay._gyhShouldRefresh = true;
-    footerNote.textContent = '整理完成 ' + success + '/' + runnable.length + ' · 失败 ' + failed + (sourceFolders.length ? ' · 残留文件夹 ' + residualSuccess + '/' + sourceFolders.length : '') + ' · 目标：' + (useSeparateFolders ? '独立影片文件夹' : '整理完成');
+    footerNote.textContent = '整理完成 ' + success + '/' + runnable.length + ' · 失败 ' + failed;
     showToast(failed || residualFailed ? '电影整理完成，失败 ' + (failed + residualFailed) + ' 项' : '电影整理完成', failed || residualFailed ? 'error' : 'success');
     return true;
   }
@@ -2019,7 +2055,7 @@
     const movieBody = overlay.querySelector('.gyh-rename-body');
     overlay.querySelector('[data-movie-cancel]').textContent = '取消';
     const previewSection = movieBody.querySelectorAll('.gyh-rename-section')[1];
-    const namingRuleSection = createMovieNamingRuleSection({ storageKey: MOVIE_NAMING_RULE_STORAGE, requiredFields: ['影片名'], showFolderMode: true });
+    const namingRuleSection = createMovieNamingRuleSection({ storageKey: MOVIE_NAMING_RULE_STORAGE, requiredFields: ['影片名'] });
     movieBody.insertBefore(namingRuleSection, previewSection);
     const previewBody = overlay.querySelector('.gyh-movie-preview-body');
     const previewHead = overlay.querySelector('.gyh-movie-preview-head span:nth-child(2)');
@@ -2054,11 +2090,15 @@
           item.info = info;
           item.match = await resolveMovieMatchYear(info, match);
           item.newName = buildMovieName(info, item.match, activeNamingRule);
-          item.status = '待确认';
+          const targetDir = buildMediaFolderName(info, item.match);
+          const currentDir = (item.file.path || []).length ? item.file.path[item.file.path.length - 1] : '';
+          item.status = item.match && item.newName === item.file.name && currentDir === targetDir ? '已完成' : '待确认';
           renderMoviePlan(previewBody, moviePlan);
           const matched = moviePlan.filter(entry => entry.match).length;
-          footerNote.textContent = '匹配完成 ' + matched + ' 个 · 跳过 ' + (moviePlan.length - matched) + ' 个 · 确认后才会修改文件';
-          startButton.disabled = matched === 0;
+          const done = moviePlan.filter(entry => entry.status === '已完成').length;
+          const pending = matched - done;
+          footerNote.textContent = '匹配完成 ' + matched + ' 个 · 已完成 ' + done + ' 个 · 跳过 ' + (moviePlan.length - matched) + ' 个' + (pending ? ' · 确认后才会修改文件' : '');
+          startButton.disabled = pending === 0;
         },
       });
     };
@@ -2070,7 +2110,7 @@
     startButton.addEventListener('click', async () => {
       if (hasCompleted) { close(); return; }
       if (hasScanned) {
-        try { hasCompleted = await executeMoviePlan(overlay, previewBody, footerNote, startButton, moviePlan, resources, namingRuleSection.getMovieNamingRule().folderMode); } catch (error) { previewBody.classList.remove('is-organizing'); startButton.disabled = false; startButton.textContent = '确认整理'; overlay.querySelector('[data-tmdb-settings]').disabled = false; overlay.querySelector('.gyh-rename-close').disabled = false; overlay.querySelector('[data-movie-cancel]').disabled = false; showToast(error.message || '电影整理失败', 'error'); }
+        try { hasCompleted = await executeMoviePlan(overlay, previewBody, footerNote, startButton, moviePlan, resources); } catch (error) { previewBody.classList.remove('is-organizing'); startButton.disabled = false; startButton.textContent = '确认整理'; overlay.querySelector('[data-tmdb-settings]').disabled = false; overlay.querySelector('.gyh-rename-close').disabled = false; overlay.querySelector('[data-movie-cancel]').disabled = false; showToast(error.message || '电影整理失败', 'error'); }
         return;
       }
       startButton.disabled = true;
@@ -2092,16 +2132,22 @@
           footerNote.textContent = '正在匹配：' + info.title;
           const match = await searchTmdbMovie(info, { preferTitle: preferFileTitle });
           const resolvedMatch = match ? await resolveMovieMatchYear(info, match) : null;
-          moviePlan.push({ file, info, match: resolvedMatch, newName: resolvedMatch ? buildMovieName(info, resolvedMatch, activeNamingRule) : '', status: resolvedMatch ? '待确认' : '已跳过' });
+          const newName = resolvedMatch ? buildMovieName(info, resolvedMatch, activeNamingRule) : '';
+          const targetDir = resolvedMatch ? buildMediaFolderName(info, resolvedMatch) : '';
+          const currentDir = (file.path || []).length ? file.path[file.path.length - 1] : '';
+          const alreadyDone = resolvedMatch && newName === file.name && currentDir === targetDir;
+          moviePlan.push({ file, info, match: resolvedMatch, newName, status: alreadyDone ? '已完成' : (resolvedMatch ? '待确认' : '已跳过') });
         }
         hasScanned = true;
         previewHead.textContent = '目标名称';
         renderMoviePlan(previewBody, moviePlan);
         const matched = moviePlan.filter(item => item.match).length;
+        const done = moviePlan.filter(item => item.status === '已完成').length;
         const skipped = moviePlan.length - matched;
-        startButton.disabled = matched === 0;
+        const pending = matched - done;
+        startButton.disabled = pending === 0;
         startButton.textContent = '确认整理';
-        footerNote.textContent = '匹配完成 ' + matched + ' 个 · 跳过 ' + skipped + ' 个 · 确认后才会修改文件';
+        footerNote.textContent = '匹配完成 ' + matched + ' 个 · 已完成 ' + done + ' 个 · 跳过 ' + skipped + ' 个' + (pending ? ' · 确认后才会修改文件' : '');
       } catch (error) {
         startButton.disabled = false;
         startButton.textContent = '重新扫描';
@@ -2133,10 +2179,14 @@
     let hasCompleted = false;
     const close = () => closeDesigner('tv', true);
     const updateSummary = () => {
+      const duplicateTargets = markDuplicateTvTargetPaths(tvPlan);
       const matched = tvGroups.filter(group => group.match).length;
       const ready = tvPlan.filter(item => item.newName).length;
-      footerNote.textContent = '匹配剧集 ' + matched + '/' + tvGroups.length + ' 部 · 可整理 ' + ready + ' 集 · 确认后才会修改文件';
-      startButton.disabled = ready === 0;
+      footerNote.textContent = duplicateTargets.size
+        ? '发现 ' + duplicateTargets.size + ' 个重复目标路径，请修正后重新扫描'
+        : '匹配剧集 ' + matched + '/' + tvGroups.length + ' 部 · 可整理 ' + ready + ' 集 · 确认后才会修改文件';
+      startButton.disabled = ready === 0 || duplicateTargets.size > 0;
+      return duplicateTargets;
     };
     overlay.querySelector('.gyh-rename-close').addEventListener('click', close);
     overlay.querySelector('[data-tv-cancel]').addEventListener('click', close);
@@ -2159,14 +2209,15 @@
           group.info = info;
           group.match = match;
           group.seasons = await getTmdbTvSeasons(match.id).catch(() => []);
-          group.folderName = buildMediaFolderName(info, match);
+          group.folderName = buildMediaFolderName(info, match, 'tv');
           tvPlan.filter(item => item.group.id === group.id).forEach(item => {
             item.info = { ...item.info, title: info.title, year: info.year, seasonYear: getTvSeasonYear(group.seasons, item.info.season, match?.year || info.year) };
             item.newName = item.info.seasonEpisode ? buildTvEpisodeName(item.info, match, activeNamingRule) : '';
             item.status = item.newName ? '待整理' : '已跳过';
           });
+          const duplicateTargets = updateSummary();
           renderTvPlan(previewBody, tvGroups);
-          updateSummary();
+          if (duplicateTargets.size) showToast('发现 ' + duplicateTargets.size + ' 个重复目标路径，请修正后重新扫描', 'error');
         },
       });
     };
@@ -2221,7 +2272,7 @@
           footerNote.textContent = '正在匹配：' + info.title;
           const match = await searchTmdbTv(info);
           const seasons = match ? await getTmdbTvSeasons(match.id).catch(() => []) : [];
-          const group = { id: String(folder.id), folder, info, match, seasons, folderName: match ? buildMediaFolderName(info, match) : '', entries: [] };
+          const group = { id: String(folder.id), folder, info, match, seasons, folderName: match ? buildMediaFolderName(info, match, 'tv') : '', entries: [] };
           tvGroups.push(group);
           episodes.forEach((episode, index) => {
             const parsedInfo = parseTvEpisode(episode.file, folder);
@@ -2233,9 +2284,10 @@
           });
         }
         hasScanned = true;
-        renderTvPlan(previewBody, tvGroups);
         startButton.textContent = '确认整理';
-        updateSummary();
+        const duplicateTargets = updateSummary();
+        renderTvPlan(previewBody, tvGroups);
+        if (duplicateTargets.size) showToast('发现 ' + duplicateTargets.size + ' 个重复目标路径，请修正后重新扫描', 'error');
       } catch (error) {
         startButton.disabled = false;
         startButton.textContent = '重新扫描';
@@ -2247,6 +2299,13 @@
   }
   // 执行剧集整理任务
   async function executeTvPlan(overlay, previewBody, footerNote, startButton, plan, folders) {
+    const duplicateTargets = markDuplicateTvTargetPaths(plan);
+    if (duplicateTargets.size) {
+      footerNote.textContent = '发现 ' + duplicateTargets.size + ' 个重复目标路径，请修正后重新扫描';
+      startButton.disabled = true;
+      showToast('存在重复目标路径，已停止整理', 'error');
+      return false;
+    }
     const runnable = plan.filter(item => item.group.match && item.newName);
     if (!runnable.length) {
       showToast('没有可整理的剧集', 'error');
@@ -2266,7 +2325,6 @@
     const selectedFolderIds = new Set(folders.map(folder => String(folder.id)));
     const updateFooterProgress = () => { footerNote.innerHTML = '匹配剧集 ' + matched + '/' + groups.length + ' 部 · 可整理 ' + runnable.length + ' 集 · 已整理 <span class="gyh-count-success">' + success + '</span> 集 · 失败 <span class="gyh-count-failed">' + failed + '</span> 集'; };
     updateFooterProgress();
-    let residualId = '';
     let residualFailed = 0;
     for (const group of groups) {
       const groupItems = runnable.filter(item => item.group.id === group.id);
@@ -2289,7 +2347,7 @@
       let shouldMoveResidual = true;
       const seasonBuckets = new Map();
       groupItems.forEach(item => {
-        const seasonName = 'S' + (item.info.season || '01');
+        const seasonName = getTvSeasonDirectoryName(item.info.season);
         const bucket = seasonBuckets.get(seasonName) || { seasonName, items: [] };
         bucket.items.push(item);
         seasonBuckets.set(seasonName, bucket);
@@ -2345,11 +2403,21 @@
         if (index < movedItems.length - 1) await delay(0);
       }
       if (shouldMoveResidual && selectedFolderIds.has(String(group.folder.id))) {
-        try {
-          if (!residualId) residualId = await ensureMovieDirectory(parentId, '残留文件');
-          await moveGuangyaFile(group.folder.id, residualId);
-        } catch (error) {
-          residualFailed += 1;
+        const groupHasFailure = groupItems.some(item => item.status === '已失败');
+        if (!groupHasFailure) {
+          try {
+            if (String(group.folder.id) !== String(showId)) {
+              await deleteGuangyaFiles([group.folder.id]);
+            } else {
+              const targetSeasonDirIds = new Set([...seasonBuckets.values()].filter(b => b.targetId).map(b => String(b.targetId)));
+              let rootChildren = [];
+              try { rootChildren = await getGuangyaFiles(showId); } catch (error) {}
+              const sourceFolderIds = rootChildren.filter(child => child.resType !== 1 && !targetSeasonDirIds.has(String(child.id))).map(child => String(child.id));
+              if (sourceFolderIds.length) await deleteGuangyaFiles(sourceFolderIds);
+            }
+          } catch (error) {
+            residualFailed += 1;
+          }
         }
       }
       refreshTvGroupRow(previewBody, group);
@@ -2361,7 +2429,7 @@
     overlay.querySelector('[data-tv-cancel]').disabled = false;
     overlay._gyhShouldRefresh = true;
     updateFooterProgress();
-    showToast(failed || residualFailed ? '剧集整理完成，失败 ' + (failed + residualFailed) + ' 项' : '剧集整理完成', failed || residualFailed ? 'error' : 'success');
+    showToast(failed || residualFailed ? '剧集整理完成，失败 ' + failed + ' 集' : '剧集整理完成', failed || residualFailed ? 'error' : 'success');
     return true;
   }
   // 打开批量重命名弹窗
