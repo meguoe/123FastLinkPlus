@@ -481,28 +481,35 @@
     return String(value || '').toLowerCase().replace(/[._·:：/\\()[\]{}【】「」"'’‘-]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
   // 整理 TMDB 候选并评分
-  function buildTmdbCandidates(data, info, type) {
+  function buildTmdbCandidates(data, info, type, { includeUnmatched = false } = {}) {
+    debugLog('TMDB 候选整理', {
+      data,
+      info,
+      type,
+    });
     const isMovie = type === 'movie';
     const queryText = normalizeMovieText(info.title);
     const results = data?.results || [];
-    const candidates = results.map(item => {
+    const scoredCandidates = results.map(item => {
       const title = item[isMovie ? 'title' : 'name'] || item[isMovie ? 'original_title' : 'original_name'] || '';
       const originalTitle = item[isMovie ? 'original_title' : 'original_name'] || '';
       const year = String(item[isMovie ? 'release_date' : 'first_air_date'] || '').slice(0, 4);
       const normalizedTitle = normalizeMovieText(title);
       const normalizedOriginal = normalizeMovieText(originalTitle);
       const exactTitle = normalizedTitle === queryText || normalizedOriginal === queryText;
+      const voteCount = Number(item.vote_count || 0);
       let score = exactTitle ? 1000 : (normalizedTitle.includes(queryText) || normalizedOriginal.includes(queryText) || queryText.includes(normalizedTitle) || queryText.includes(normalizedOriginal) ? 300 : 0);
       if (info.year && year) { const gap = Math.abs(Number(info.year) - Number(year)); score += gap === 0 ? 120 : gap === 1 ? 96 : Math.max(-80, 40 - gap * 8); }
-      score += Math.min(12, Number(item.vote_count || 0) > 0 ? Math.log(Number(item.vote_count) + 1) * 2 : 0);
-      return { id: item.id, title, originalTitle, year, score, exactTitle };
-    }).sort((a, b) => b.score - a.score).filter(item => item.exactTitle || item.score >= 300).slice(0, 10);
+      score += Math.min(12, voteCount > 0 ? Math.log(voteCount + 1) * 2 : 0);
+      return { id: item.id, title, originalTitle, year, voteCount, score, exactTitle };
+    }).sort((a, b) => includeUnmatched ? b.voteCount - a.voteCount : b.score - a.score);
+    const candidates = (includeUnmatched ? scoredCandidates : scoredCandidates.filter(item => item.exactTitle || item.score >= 300)).slice(0, 10);
     debugLog('TMDB 候选评分完成', {
       type,
       query: info.title,
       resultCount: results.length,
       candidateCount: candidates.length,
-      candidates: candidates.map(item => ({ id: item.id, title: item.title, originalTitle: item.originalTitle, year: item.year, score: item.score, exactTitle: item.exactTitle })),
+      candidates: candidates.map(item => ({ id: item.id, title: item.title, originalTitle: item.originalTitle, year: item.year, voteCount: item.voteCount, score: item.score, exactTitle: item.exactTitle })),
     });
     return candidates;
   }
@@ -555,7 +562,13 @@
     const queryText = normalizeMovieText(info.title);
     if (!queryText) return null;
     const isMovie = type === 'movie';
-    const results = (data?.results || []).slice(0, 5);
+    const dateKey = isMovie ? 'release_date' : 'first_air_date';
+    const requestedYear = String(info.year || '');
+    const results = (data?.results || []).map((item, index) => ({
+      item,
+      index,
+      sameYear: requestedYear && String(item?.[dateKey] || '').slice(0, 4) === requestedYear,
+    })).sort((a, b) => Number(b.sameYear) - Number(a.sameYear) || a.index - b.index).slice(0, 5).map(entry => entry.item);
     debugLog('TMDB 开始别名匹配', { type, query: info.title, resultCount: results.length });
     for (const item of results) {
       const aliases = await getTmdbAlternativeTitles(type, item.id, key);
@@ -574,22 +587,26 @@
     return null;
   }
   // 获取 TMDB 电影候选
-  async function searchTmdbMovieCandidates(info, { preferTitle = false } = {}) {
+  async function searchTmdbMovieCandidates(info, { preferTitle = false, includeUnmatched = false } = {}) {
     const key = await getTmdbKey();
     if (!key || !info.title) return null;
     const queryValues = preferTitle
       ? [info.title, info.folderChineseTitle, info.fileEnglishTitle, info.folderEnglishTitle]
       : [info.folderChineseTitle, info.folderEnglishTitle, info.fileEnglishTitle, info.title];
     const queries = [...new Set(queryValues.map(value => String(value || '').trim()).filter(Boolean))];
+    const year = /^(?:19|20)\d{2}$/.test(String(info.year || '')) ? String(info.year) : '';
+    let fallbackCandidates = [];
     for (const queryText of queries) {
       const query = encodeURIComponent(queryText);
-      const data = await requestTmdb(`${API.tmdb}/search/movie?language=zh-CN&region=CN&query=${query}`, key);
+      const data = await requestTmdb(`${API.tmdb}/search/movie?language=zh-CN&region=CN&query=${query}${year ? `&primary_release_year=${encodeURIComponent(year)}` : ''}`, key);
       const queryInfo = { ...info, title: queryText };
-      const candidates = buildTmdbCandidates(data, queryInfo, 'movie');
-      if (candidates.length) {
+      const candidates = buildTmdbCandidates(data, queryInfo, 'movie', { includeUnmatched });
+      const hasRequestedYear = !info.year || candidates.some(candidate => candidate.year === String(info.year));
+      if (candidates.length && hasRequestedYear) {
         debugLog('TMDB 电影名称直接匹配成功', { query: queryText, id: candidates[0].id });
         return candidates;
       }
+      if (candidates.length && !fallbackCandidates.length) fallbackCandidates = candidates;
       debugLog('TMDB 电影名称未匹配，尝试别名', { query: queryText });
       const aliasCandidate = await findTmdbAliasCandidate(data, queryInfo, 'movie', key);
       if (aliasCandidate) {
@@ -597,7 +614,7 @@
         return [aliasCandidate];
       }
     }
-    return [];
+    return fallbackCandidates;
   }
   // 获取最佳 TMDB 电影候选
   async function searchTmdbMovie(info, options = {}) {
@@ -652,20 +669,22 @@
     return { ...fileInfo, title: folderTitle || fileTitle || fileInfo.title, season: seasonEpisode.season, episode: seasonEpisode.episode, seasonEpisode: seasonEpisode.label };
   }
   // 获取 TMDB 剧集候选
-  async function searchTmdbTvCandidates(info) {
+  async function searchTmdbTvCandidates(info, { includeUnmatched = false } = {}) {
     const key = await getTmdbKey();
     if (!key || !info.title) return [];
     const query = encodeURIComponent(info.title);
-    const data = await requestTmdb(`${API.tmdb}/search/tv?language=zh-CN&region=CN&query=${query}`, key);
-    const candidates = buildTmdbCandidates(data, info, 'tv');
-    if (candidates.length) {
+    const year = /^(?:19|20)\d{2}$/.test(String(info.year || '')) ? String(info.year) : '';
+    const data = await requestTmdb(`${API.tmdb}/search/tv?language=zh-CN&region=CN&query=${query}${year ? `&first_air_date_year=${encodeURIComponent(year)}` : ''}`, key);
+    const candidates = buildTmdbCandidates(data, info, 'tv', { includeUnmatched });
+    const hasRequestedYear = !info.year || candidates.some(candidate => candidate.year === String(info.year));
+    if (candidates.length && hasRequestedYear) {
       debugLog('TMDB 剧集名称直接匹配成功', { query: info.title, id: candidates[0].id });
       return candidates;
     }
     debugLog('TMDB 剧集名称未匹配，尝试别名', { query: info.title });
     const aliasCandidate = await findTmdbAliasCandidate(data, info, 'tv', key);
     if (aliasCandidate) debugLog('TMDB 剧集最终使用别名候选', { query: info.title, id: aliasCandidate.id });
-    return aliasCandidate ? [aliasCandidate] : [];
+    return aliasCandidate ? [aliasCandidate] : candidates;
   }
   // 获取最佳 TMDB 剧集候选
   async function searchTmdbTv(info) {
@@ -1990,9 +2009,14 @@
     render();
     return section;
   }
+  // 选择文件和目录使用的标题
+  function getPreferredMediaTitle(info, match) {
+    const localizedTitle = [match?.title, match?.originalTitle].find(value => /[\u3400-\u9fff]/.test(String(value || '')));
+    return String(match?.chineseTitle || localizedTitle || match?.originalTitle || match?.title || info?.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+  }
   function buildMediaName(type, info, match, rule) {
     const isMovie = type === 'movie';
-    const title = String(match?.chineseTitle || match?.originalTitle || match?.title || info.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+    const title = getPreferredMediaTitle(info, match);
     const fields = rule?.fields?.length ? rule.fields : isMovie ? defaultMovieNamingFields : defaultTvNamingFields;
     const videoFormat = info.videoCodec ? [info.videoCodec, info.hq, info.dynamicRange, info.frameRate].filter(Boolean).join('.') : '';
     const releaseYear = isMovie ? (match?.resolvedYear || match?.year || info.year || '') : (info.seasonYear || match?.year || info.year || '');
@@ -2004,7 +2028,7 @@
   }
   // 生成整理目标文件夹名（剧名 (年份) {tmdb-id}）
   function buildMediaFolderName(info, match, type = 'movie') {
-    const title = String(match?.chineseTitle || match?.originalTitle || match?.title || info.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+    const title = getPreferredMediaTitle(info, match);
     const tmdb = match?.id ? '{tmdb-' + match.id + '}' : '';
     const year = match?.resolvedYear || match?.year || info.year || '';
     return [title, year ? `(${year})` : '', tmdb].filter(Boolean).join(' ');
@@ -2221,7 +2245,7 @@
       showTmdbCorrection({
         type: 'movie',
         info: item.info,
-        searchCandidates: info => searchTmdbMovieCandidates(info, { preferTitle: true }),
+        searchCandidates: info => searchTmdbMovieCandidates(info, { preferTitle: true, includeUnmatched: true }),
         async onApply(info, match) {
           item.info = info;
           const preferredMatch = await applyPreferredTmdbTitle('movie', match);
@@ -2341,7 +2365,7 @@
       showTmdbCorrection({
         type: 'tv',
         info: group.info,
-        searchCandidates: searchTmdbTvCandidates,
+        searchCandidates: info => searchTmdbTvCandidates(info, { includeUnmatched: true }),
         async onApply(info, match) {
           group.info = info;
           group.match = await applyPreferredTmdbTitle('tv', match);
