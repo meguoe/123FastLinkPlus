@@ -348,7 +348,7 @@
     return true;
   }
   const movieNamingFields = ['影片名', '上映时间', '来源', '分辨率', '视频编码', '音频编码', 'TMDB'];
-  const defaultMovieNamingFields = ['影片名', '上映时间', '分辨率', '来源', '视频编码', 'TMDB'];
+  const defaultMovieNamingFields = ['影片名', '上映时间', '分辨率', '视频编码', '音频编码', '来源', 'TMDB'];
   const tvNamingFields = ['剧集名', '季集信息', '上映时间', '来源', '分辨率', '视频编码', '音频编码', 'TMDB'];
   const defaultTvNamingFields = ['剧集名', '季集信息', '上映时间', '分辨率', '来源', '视频编码'];
   const movieReleaseYearCache = new Map();
@@ -502,7 +502,7 @@
       if (info.year && year) { const gap = Math.abs(Number(info.year) - Number(year)); score += gap === 0 ? 120 : gap === 1 ? 96 : Math.max(-80, 40 - gap * 8); }
       score += Math.min(12, voteCount > 0 ? Math.log(voteCount + 1) * 2 : 0);
       return { id: item.id, title, originalTitle, year, voteCount, score, exactTitle };
-    }).sort((a, b) => includeUnmatched ? b.voteCount - a.voteCount : b.score - a.score);
+    }).sort((a, b) => includeUnmatched ? b.voteCount - a.voteCount : b.score - a.score || b.voteCount - a.voteCount);
     const candidates = (includeUnmatched ? scoredCandidates : scoredCandidates.filter(item => item.exactTitle || item.score >= 300)).slice(0, 10);
     debugLog('TMDB 候选评分完成', {
       type,
@@ -568,7 +568,7 @@
       item,
       index,
       sameYear: requestedYear && String(item?.[dateKey] || '').slice(0, 4) === requestedYear,
-    })).sort((a, b) => Number(b.sameYear) - Number(a.sameYear) || a.index - b.index).slice(0, 5).map(entry => entry.item);
+    })).sort((a, b) => Number(b.sameYear) - Number(a.sameYear) || Number(b.item?.vote_count || 0) - Number(a.item?.vote_count || 0) || a.index - b.index).slice(0, 5).map(entry => entry.item);
     debugLog('TMDB 开始别名匹配', { type, query: info.title, resultCount: results.length });
     for (const item of results) {
       const aliases = await getTmdbAlternativeTitles(type, item.id, key);
@@ -601,8 +601,8 @@
       const data = await requestTmdb(`${API.tmdb}/search/movie?language=zh-CN&region=CN&query=${query}${year ? `&primary_release_year=${encodeURIComponent(year)}` : ''}`, key);
       const queryInfo = { ...info, title: queryText };
       const candidates = buildTmdbCandidates(data, queryInfo, 'movie', { includeUnmatched });
-      const hasRequestedYear = !info.year || candidates.some(candidate => candidate.year === String(info.year));
-      if (candidates.length && hasRequestedYear) {
+      const hasReliableDirectMatch = candidates.some(candidate => candidate.exactTitle && (!info.year || candidate.year === String(info.year)));
+      if (candidates.length && (includeUnmatched || hasReliableDirectMatch)) {
         debugLog('TMDB 电影名称直接匹配成功', { query: queryText, id: candidates[0].id });
         return candidates;
       }
@@ -676,8 +676,8 @@
     const year = /^(?:19|20)\d{2}$/.test(String(info.year || '')) ? String(info.year) : '';
     const data = await requestTmdb(`${API.tmdb}/search/tv?language=zh-CN&region=CN&query=${query}${year ? `&first_air_date_year=${encodeURIComponent(year)}` : ''}`, key);
     const candidates = buildTmdbCandidates(data, info, 'tv', { includeUnmatched });
-    const hasRequestedYear = !info.year || candidates.some(candidate => candidate.year === String(info.year));
-    if (candidates.length && hasRequestedYear) {
+    const hasReliableDirectMatch = candidates.some(candidate => candidate.exactTitle && (!info.year || candidate.year === String(info.year)));
+    if (candidates.length && (includeUnmatched || hasReliableDirectMatch)) {
       debugLog('TMDB 剧集名称直接匹配成功', { query: info.title, id: candidates[0].id });
       return candidates;
     }
