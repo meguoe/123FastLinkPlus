@@ -18,6 +18,8 @@
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_info
+// @grant       GM_registerMenuCommand
+// @grant       GM_unregisterMenuCommand
 // @connect     *
 // @connect     api.tmdb.org
 // @run-at      document-start
@@ -31,6 +33,7 @@
   const STYLE_ID = 'guangya-helper-styles';
   const isXunleiPan = /^pan\.xunlei\.com$/i.test(window.location.hostname);
   const TMDB_KEY_STORAGE = 'gyh-tmdb-key';
+  const DEBUG_STORAGE = 'gyh-debug-enabled';
   const TMDB_API_BASE = 'https://api.tmdb.org/3';
   const MOVIE_NAMING_RULE_STORAGE = 'gyh-movie-naming-rule';
   const TV_NAMING_RULE_STORAGE = 'gyh-tv-naming-rule';
@@ -51,6 +54,8 @@
   });
   const VIDEO_EXTENSION_RE = /\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|ts|m2ts|mpg|mpeg)$/i;
   const MIN_MEDIA_SIZE = 10 * 1024 * 1024;
+  let DEBUG = getStoredValue(DEBUG_STORAGE, false) === true;
+  let debugMenuCommandId = null;
   const strokeIcon = (content, width = '1.8') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round">${content}</svg>`;
   const ICONS = Object.freeze({
     close: strokeIcon('<path d="m6 6 12 12M18 6 6 18"></path>'),
@@ -184,6 +189,30 @@
     if (typeof GM_setValue === 'function') return GM_setValue(key, value);
     localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
   }
+  // 输出受调试开关控制的日志
+  function debugLog(...args) {
+    if (DEBUG) console.log('[GuangyaHelper]', ...args);
+  }
+  // 注册可即时切换的油猴调试菜单
+  function registerDebugMenu() {
+    if (typeof GM_registerMenuCommand !== 'function') return;
+    if (debugMenuCommandId !== null) {
+      if (debugMenuCommandId == null || typeof GM_unregisterMenuCommand !== 'function') return;
+      try {
+        GM_unregisterMenuCommand(debugMenuCommandId);
+        debugMenuCommandId = null;
+      } catch (error) {
+        return;
+      }
+    }
+    const label = DEBUG ? '关闭调试' : '开启调试';
+    debugMenuCommandId = GM_registerMenuCommand(label, () => {
+      DEBUG = !DEBUG;
+      setStoredValue(DEBUG_STORAGE, DEBUG);
+      registerDebugMenu();
+      debugLog(`调试已切换为 ${DEBUG}`);
+    });
+  }
   function readJsonResponse(response) {
     if (response.response) return response.response;
     try { return JSON.parse(response.responseText); } catch (error) { return null; }
@@ -294,6 +323,7 @@
     const path = getTmdbApiPath(url);
     const requestUrlBase = `${TMDB_API_BASE}${path}`;
     const requestUrl = isBearer ? requestUrlBase : `${requestUrlBase}${requestUrlBase.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(key)}`;
+    debugLog('TMDB 请求开始', { path, auth: isBearer ? 'Bearer' : 'API Key' });
     return requestJson({
       url: requestUrl,
       headers: isBearer ? { Authorization: `Bearer ${key}` } : {},
@@ -303,6 +333,12 @@
       timeoutMessage: 'TMDB 请求超时，请尝试使用代理',
       abortMessage: 'TMDB 请求已取消',
       getError: (data, status) => data?.status_message || `TMDB 验证失败（${status}）`,
+    }).then(data => {
+      debugLog('TMDB 请求成功', { path });
+      return data;
+    }).catch(error => {
+      debugLog('TMDB 请求失败', { path, status: error?.status || null, message: error?.message || String(error) });
+      throw error;
     });
   }
   // 验证 TMDB 密钥
@@ -448,7 +484,8 @@
   function buildTmdbCandidates(data, info, type) {
     const isMovie = type === 'movie';
     const queryText = normalizeMovieText(info.title);
-    return (data?.results || []).map(item => {
+    const results = data?.results || [];
+    const candidates = results.map(item => {
       const title = item[isMovie ? 'title' : 'name'] || item[isMovie ? 'original_title' : 'original_name'] || '';
       const originalTitle = item[isMovie ? 'original_title' : 'original_name'] || '';
       const year = String(item[isMovie ? 'release_date' : 'first_air_date'] || '').slice(0, 4);
@@ -460,12 +497,24 @@
       score += Math.min(12, Number(item.vote_count || 0) > 0 ? Math.log(Number(item.vote_count) + 1) * 2 : 0);
       return { id: item.id, title, originalTitle, year, score, exactTitle };
     }).sort((a, b) => b.score - a.score).filter(item => item.exactTitle || item.score >= 300).slice(0, 10);
+    debugLog('TMDB 候选评分完成', {
+      type,
+      query: info.title,
+      resultCount: results.length,
+      candidateCount: candidates.length,
+      candidates: candidates.map(item => ({ id: item.id, title: item.title, originalTitle: item.originalTitle, year: item.year, score: item.score, exactTitle: item.exactTitle })),
+    });
+    return candidates;
   }
   // 获取并缓存包含别名的 TMDB 剧集详情
   function getTmdbTvDetails(tvId, key) {
     if (!tvId) return Promise.resolve(null);
     const cacheKey = String(tvId);
-    if (tmdbTvDetailsCache.has(cacheKey)) return tmdbTvDetailsCache.get(cacheKey);
+    if (tmdbTvDetailsCache.has(cacheKey)) {
+      debugLog('TMDB 剧集详情缓存命中', { tvId });
+      return tmdbTvDetailsCache.get(cacheKey);
+    }
+    debugLog('TMDB 剧集详情缓存未命中', { tvId });
     const request = requestTmdb(`${API.tmdb}/tv/${encodeURIComponent(tvId)}?language=zh-CN&append_to_response=alternative_titles`, key).catch(() => null);
     tmdbTvDetailsCache.set(cacheKey, request);
     return request;
@@ -479,7 +528,11 @@
         .then(items => items.map(item => ({ title: String(item?.title || '').trim(), region: item?.iso_3166_1 || '', type: item?.type || '' })).filter(item => item.title));
     }
     const cacheKey = `${type}:${id}`;
-    if (tmdbAlternativeTitleCache.has(cacheKey)) return tmdbAlternativeTitleCache.get(cacheKey);
+    if (tmdbAlternativeTitleCache.has(cacheKey)) {
+      debugLog('TMDB 电影别名缓存命中', { movieId: id });
+      return tmdbAlternativeTitleCache.get(cacheKey);
+    }
+    debugLog('TMDB 电影别名缓存未命中', { movieId: id });
     const request = requestTmdb(`${API.tmdb}/movie/${encodeURIComponent(id)}/alternative_titles`, key)
       .then(data => data?.titles || [])
       .then(items => items.map(item => ({ title: String(item?.title || '').trim(), region: item?.iso_3166_1 || '', type: item?.type || '' })).filter(item => item.title))
@@ -492,13 +545,19 @@
     const queryText = normalizeMovieText(info.title);
     if (!queryText) return null;
     const isMovie = type === 'movie';
-    for (const item of (data?.results || []).slice(0, 5)) {
+    const results = (data?.results || []).slice(0, 5);
+    debugLog('TMDB 开始别名匹配', { type, query: info.title, resultCount: results.length });
+    for (const item of results) {
       const aliases = await getTmdbAlternativeTitles(type, item.id, key);
       const alias = aliases.find(candidate => normalizeMovieText(candidate.title) === queryText);
+      debugLog('TMDB 检查候选别名', { type, id: item.id, aliasCount: aliases.length, matched: Boolean(alias) });
       if (!alias) continue;
       const titleKey = isMovie ? 'title' : 'name';
-      return buildTmdbCandidates({ results: [{ ...item, [titleKey]: alias.title }] }, info, type)[0] || null;
+      const candidate = buildTmdbCandidates({ results: [{ ...item, [titleKey]: alias.title }] }, info, type)[0] || null;
+      debugLog('TMDB 别名匹配成功', { type, id: item.id, alias: alias.title });
+      return candidate;
     }
+    debugLog('TMDB 别名匹配失败', { type, query: info.title });
     return null;
   }
   // 获取 TMDB 电影候选
@@ -514,16 +573,23 @@
       const data = await requestTmdb(`${API.tmdb}/search/movie?language=zh-CN&region=CN&query=${query}`, key);
       const queryInfo = { ...info, title: queryText };
       const candidates = buildTmdbCandidates(data, queryInfo, 'movie');
-      if (candidates.length) return candidates;
+      if (candidates.length) {
+        debugLog('TMDB 电影名称直接匹配成功', { query: queryText, id: candidates[0].id });
+        return candidates;
+      }
+      debugLog('TMDB 电影名称未匹配，尝试别名', { query: queryText });
       const aliasCandidate = await findTmdbAliasCandidate(data, queryInfo, 'movie', key);
-      if (aliasCandidate) return [aliasCandidate];
+      if (aliasCandidate) {
+        debugLog('TMDB 电影最终使用别名候选', { query: queryText, id: aliasCandidate.id });
+        return [aliasCandidate];
+      }
     }
     return [];
   }
   // 获取最佳 TMDB 电影候选
   async function searchTmdbMovie(info, options = {}) {
     const candidates = await searchTmdbMovieCandidates(info, options);
-    console.log('TMDB 电影候选:', candidates);
+    debugLog('TMDB 电影最终候选', candidates || []);
     return candidates?.[0] || null;
   }
   // 获取 TMDB 电影的全部上映年份
@@ -579,8 +645,13 @@
     const query = encodeURIComponent(info.title);
     const data = await requestTmdb(`${API.tmdb}/search/tv?language=zh-CN&region=CN&query=${query}`, key);
     const candidates = buildTmdbCandidates(data, info, 'tv');
-    if (candidates.length) return candidates;
+    if (candidates.length) {
+      debugLog('TMDB 剧集名称直接匹配成功', { query: info.title, id: candidates[0].id });
+      return candidates;
+    }
+    debugLog('TMDB 剧集名称未匹配，尝试别名', { query: info.title });
     const aliasCandidate = await findTmdbAliasCandidate(data, info, 'tv', key);
+    if (aliasCandidate) debugLog('TMDB 剧集最终使用别名候选', { query: info.title, id: aliasCandidate.id });
     return aliasCandidate ? [aliasCandidate] : [];
   }
   // 获取最佳 TMDB 剧集候选
@@ -593,7 +664,9 @@
     const key = await getTmdbKey();
     if (!key || !tvId) return [];
     const data = await getTmdbTvDetails(tvId, key);
-    return (data?.seasons || []).map(season => ({ season: Number(season.season_number), total: Number(season.episode_count) || 0, name: season.name || '', year: String(season.air_date || '').slice(0, 4) })).filter(season => Number.isFinite(season.season) && season.season >= 0);
+    const seasons = (data?.seasons || []).map(season => ({ season: Number(season.season_number), total: Number(season.episode_count) || 0, name: season.name || '', year: String(season.air_date || '').slice(0, 4) })).filter(season => Number.isFinite(season.season) && season.season >= 0);
+    debugLog('TMDB 剧集季度读取完成', { tvId, seasonCount: seasons.length });
+    return seasons;
   }
   // 判断视频文件大小
   function getMovieFileSize(file) {
@@ -3129,6 +3202,7 @@
       runPendingMagnetCloudAdd();
     }
   }
+  registerDebugMenu();
   if (document.body) {
     init();
   } else {
