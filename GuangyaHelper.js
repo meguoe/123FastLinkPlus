@@ -375,13 +375,13 @@
   }
   // 提取文件或文件夹中的英文片名
   function extractMovieEnglishTitle(value) {
-    const source = stripMovieSiteTags(value);
+    const source = stripMovieSiteTags(value).replace(/\{[^}]*\}/g, ' ');
     const extensionMatch = source.match(/\.(?:3g2|3gp|asf|avi|flv|m2ts|m4v|mkv|mov|mp4|mpeg|mpg|ts|webm|wmv)\s*$/i);
     const base = extensionMatch ? source.slice(0, -extensionMatch[0].length) : source;
     const yearMatch = [...base.matchAll(/(?:19|20)\d{2}/g)].filter(match => Number(match[0]) <= new Date().getFullYear() + 1).at(-1);
     const beforeYear = yearMatch ? base.slice(0, yearMatch.index) : base;
-    const clean = beforeYear.replace(/【[^】]*】|\[[^\]]*\]|『[^』]*』|（[^）]*）|\([^)]*\)/g, ' ');
-    const tokens = clean.replace(/[._-]+/g, ' ').split(/\s+/).map(token => token.trim()).filter(token => /^[A-Za-z][A-Za-z0-9']*$/.test(token) && !/^(?:2160p?|1080p?|720p?|540p?|4k|8k|web|dl|rip|webrip|bluray|bdrip|bdremux|remux|hdr(?:10\+?)?|dovi|dv|hevc|x265|h265|x264|h264|aac|dts(?:[ ._-]?hd)?(?:[ ._-]?ma)?|truehd|atmos|ddp?|eac3|proper|repack|extended|uncut|limited|complete|multi|subbed|dubbed)$/i.test(token));
+    const clean = beforeYear.replace(/【[^】]*】|\[[^\]]*\]|『[^』]*』|（[^）]*）|\([^)]*\)|\{[^}]*\}/g, ' ');
+    const tokens = clean.replace(/[._-]+/g, ' ').split(/\s+/).map(token => token.trim()).filter(token => /^(?:[A-Za-z][A-Za-z0-9']*|\d{1,3})$/.test(token) && !/^(?:2160p?|1080p?|720p?|540p?|4k|8k|web|dl|rip|webrip|bluray|bdrip|bdremux|remux|hdr(?:10\+?)?|dovi|dv|hevc|x265|h265|x264|h264|aac|dts(?:[ ._-]?hd)?(?:[ ._-]?ma)?|truehd|atmos|ddp?|eac3|proper|repack|extended|uncut|limited|complete|multi|subbed|dubbed)$/i.test(token));
     return tokens.join(' ').trim();
   }
   // 规范片源标记
@@ -540,6 +540,16 @@
     tmdbAlternativeTitleCache.set(cacheKey, request);
     return request;
   }
+  // 为最终选中的候选补充中国大陆地区别名，用于文件和目录命名
+  async function applyPreferredTmdbTitle(type, candidate) {
+    if (!candidate?.id || candidate.chineseTitle) return candidate;
+    const key = await getTmdbKey();
+    if (!key) return candidate;
+    const aliases = await getTmdbAlternativeTitles(type, candidate.id, key);
+    const chineseTitle = aliases.find(item => String(item.region || '').toUpperCase() === 'CN')?.title || '';
+    debugLog('TMDB CN 别名选择完成', { type, id: candidate.id, chineseTitle: chineseTitle || null });
+    return chineseTitle ? { ...candidate, chineseTitle } : candidate;
+  }
   // 标题无法直接匹配时，使用 TMDB 别名精确匹配前五个搜索结果
   async function findTmdbAliasCandidate(data, info, type, key) {
     const queryText = normalizeMovieText(info.title);
@@ -555,7 +565,10 @@
       const titleKey = isMovie ? 'title' : 'name';
       const candidate = buildTmdbCandidates({ results: [{ ...item, [titleKey]: alias.title }] }, info, type)[0] || null;
       debugLog('TMDB 别名匹配成功', { type, id: item.id, alias: alias.title });
-      return candidate;
+      if (!candidate) return null;
+      const originalTitle = item[isMovie ? 'original_title' : 'original_name'] || item[titleKey] || candidate.originalTitle;
+      const chineseTitle = aliases.find(item => String(item.region || '').toUpperCase() === 'CN')?.title || '';
+      return { ...candidate, originalTitle, ...(chineseTitle ? { chineseTitle } : {}) };
     }
     debugLog('TMDB 别名匹配失败', { type, query: info.title });
     return null;
@@ -566,7 +579,7 @@
     if (!key || !info.title) return null;
     const queryValues = preferTitle
       ? [info.title, info.folderChineseTitle, info.fileEnglishTitle, info.folderEnglishTitle]
-      : [info.folderChineseTitle, info.fileEnglishTitle, info.folderEnglishTitle, info.title];
+      : [info.folderChineseTitle, info.folderEnglishTitle, info.fileEnglishTitle, info.title];
     const queries = [...new Set(queryValues.map(value => String(value || '').trim()).filter(Boolean))];
     for (const queryText of queries) {
       const query = encodeURIComponent(queryText);
@@ -590,7 +603,7 @@
   async function searchTmdbMovie(info, options = {}) {
     const candidates = await searchTmdbMovieCandidates(info, options);
     debugLog('TMDB 电影最终候选', candidates || []);
-    return candidates?.[0] || null;
+    return candidates?.[0] ? applyPreferredTmdbTitle('movie', candidates[0]) : null;
   }
   // 获取 TMDB 电影的全部上映年份
   async function getTmdbMovieReleaseYears(movieId) {
@@ -657,7 +670,7 @@
   // 获取最佳 TMDB 剧集候选
   async function searchTmdbTv(info) {
     const candidates = await searchTmdbTvCandidates(info);
-    return candidates[0] || null;
+    return candidates[0] ? applyPreferredTmdbTitle('tv', candidates[0]) : null;
   }
   // 获取剧集各季总集数
   async function getTmdbTvSeasons(tvId) {
@@ -1979,7 +1992,7 @@
   }
   function buildMediaName(type, info, match, rule) {
     const isMovie = type === 'movie';
-    const title = String(match?.title || info.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+    const title = String(match?.chineseTitle || match?.originalTitle || match?.title || info.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
     const fields = rule?.fields?.length ? rule.fields : isMovie ? defaultMovieNamingFields : defaultTvNamingFields;
     const videoFormat = info.videoCodec ? [info.videoCodec, info.hq, info.dynamicRange, info.frameRate].filter(Boolean).join('.') : '';
     const releaseYear = isMovie ? (match?.resolvedYear || match?.year || info.year || '') : (info.seasonYear || match?.year || info.year || '');
@@ -1991,7 +2004,7 @@
   }
   // 生成整理目标文件夹名（剧名 (年份) {tmdb-id}）
   function buildMediaFolderName(info, match, type = 'movie') {
-    const title = String(match?.title || info.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+    const title = String(match?.chineseTitle || match?.originalTitle || match?.title || info.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
     const tmdb = match?.id ? '{tmdb-' + match.id + '}' : '';
     const year = match?.resolvedYear || match?.year || info.year || '';
     return [title, year ? `(${year})` : '', tmdb].filter(Boolean).join(' ');
@@ -2211,7 +2224,8 @@
         searchCandidates: info => searchTmdbMovieCandidates(info, { preferTitle: true }),
         async onApply(info, match) {
           item.info = info;
-          item.match = await resolveMovieMatchYear(info, match);
+          const preferredMatch = await applyPreferredTmdbTitle('movie', match);
+          item.match = await resolveMovieMatchYear(info, preferredMatch);
           item.newName = buildMovieName(info, item.match, activeNamingRule);
           const targetDir = buildMediaFolderName(info, item.match);
           const currentDir = (item.file.path || []).length ? item.file.path[item.file.path.length - 1] : '';
@@ -2330,12 +2344,12 @@
         searchCandidates: searchTmdbTvCandidates,
         async onApply(info, match) {
           group.info = info;
-          group.match = match;
-          group.seasons = await getTmdbTvSeasons(match.id).catch(() => []);
-          group.folderName = buildMediaFolderName(info, match, 'tv');
+          group.match = await applyPreferredTmdbTitle('tv', match);
+          group.seasons = await getTmdbTvSeasons(group.match.id).catch(() => []);
+          group.folderName = buildMediaFolderName(info, group.match, 'tv');
           tvPlan.filter(item => item.group.id === group.id).forEach(item => {
-            item.info = { ...item.info, title: info.title, year: info.year, seasonYear: getTvSeasonYear(group.seasons, item.info.season, match?.year || info.year) };
-            item.newName = item.info.seasonEpisode ? buildTvEpisodeName(item.info, match, activeNamingRule) : '';
+            item.info = { ...item.info, title: info.title, year: info.year, seasonYear: getTvSeasonYear(group.seasons, item.info.season, group.match?.year || info.year) };
+            item.newName = item.info.seasonEpisode ? buildTvEpisodeName(item.info, group.match, activeNamingRule) : '';
             item.status = item.newName ? '待整理' : '已跳过';
           });
           const duplicateTargets = updateSummary();
