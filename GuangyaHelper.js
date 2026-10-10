@@ -2012,7 +2012,7 @@
   // 选择文件和目录使用的标题
   function getPreferredMediaTitle(info, match) {
     const localizedTitle = [match?.title, match?.originalTitle].find(value => /[\u3400-\u9fff]/.test(String(value || '')));
-    return String(match?.chineseTitle || localizedTitle || match?.originalTitle || match?.title || info?.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+    return String(localizedTitle || match?.chineseTitle || match?.originalTitle || match?.title || info?.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
   }
   function buildMediaName(type, info, match, rule) {
     const isMovie = type === 'movie';
