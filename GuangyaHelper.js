@@ -347,10 +347,10 @@
     if (!data || data.images === undefined) throw new Error('TMDB 密钥无效');
     return true;
   }
-  const movieNamingFields = ['影片名', '上映时间', '来源', '分辨率', '视频编码', '音频编码', 'TMDB'];
+  const movieNamingFields = ['影片名', '上映时间', '分辨率', '视频编码', '音频编码', '来源', 'TMDB'];
   const defaultMovieNamingFields = ['影片名', '上映时间', '分辨率', '视频编码', '音频编码', '来源', 'TMDB'];
   const tvNamingFields = ['剧集名', '季集信息', '上映时间', '来源', '分辨率', '视频编码', '音频编码', 'TMDB'];
-  const defaultTvNamingFields = ['剧集名', '季集信息', '上映时间', '分辨率', '来源', '视频编码'];
+  const defaultTvNamingFields = ['剧集名', '季集信息', '上映时间', '分辨率', '来源', '视频编码', '音频编码'];
   const movieReleaseYearCache = new Map();
   const tmdbAlternativeTitleCache = new Map();
   const tmdbTvDetailsCache = new Map();
