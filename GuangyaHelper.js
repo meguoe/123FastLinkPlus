@@ -316,6 +316,8 @@
   const tvNamingFields = ['剧集名', '季集信息', '上映时间', '来源', '分辨率', '视频编码', '音频编码', 'TMDB'];
   const defaultTvNamingFields = ['剧集名', '季集信息', '上映时间', '分辨率', '来源', '视频编码'];
   const movieReleaseYearCache = new Map();
+  const tmdbAlternativeTitleCache = new Map();
+  const tmdbTvDetailsCache = new Map();
   // 移除站点推广标签
   function stripMovieSiteTags(value) {
     return String(value || '').replace(/(?:【[^】]*(?:https?:\/\/|www\.|(?:[a-z0-9-]+\.)+(?:com|net|org|cn|edu|gov|info|biz|io|co|me|tv|cc|vip|top|xyz|site|online|club|live|app|pro|mobi|ai|cloud|fun|link|wiki|name|work|store|shop|tech|dev|icu|one|video|movie))[^】]*】|\[[^\]]*(?:https?:\/\/|www\.|(?:[a-z0-9-]+\.)+(?:com|net|org|cn|edu|gov|info|biz|io|co|me|tv|cc|vip|top|xyz|site|online|club|live|app|pro|mobi|ai|cloud|fun|link|wiki|name|work|store|shop|tech|dev|icu|one|video|movie))[^\]]*\]|『[^』]*(?:https?:\/\/|www\.|(?:[a-z0-9-]+\.)+(?:com|net|org|cn|edu|gov|info|biz|io|co|me|tv|cc|vip|top|xyz|site|online|club|live|app|pro|mobi|ai|cloud|fun|link|wiki|name|work|store|shop|tech|dev|icu|one|video|movie))[^』]*』)/ig, ' ');
@@ -459,6 +461,46 @@
       return { id: item.id, title, originalTitle, year, score, exactTitle };
     }).sort((a, b) => b.score - a.score).filter(item => item.exactTitle || item.score >= 300).slice(0, 10);
   }
+  // 获取并缓存包含别名的 TMDB 剧集详情
+  function getTmdbTvDetails(tvId, key) {
+    if (!tvId) return Promise.resolve(null);
+    const cacheKey = String(tvId);
+    if (tmdbTvDetailsCache.has(cacheKey)) return tmdbTvDetailsCache.get(cacheKey);
+    const request = requestTmdb(`${API.tmdb}/tv/${encodeURIComponent(tvId)}?language=zh-CN&append_to_response=alternative_titles`, key).catch(() => null);
+    tmdbTvDetailsCache.set(cacheKey, request);
+    return request;
+  }
+  // 获取并缓存 TMDB 电影或剧集别名
+  function getTmdbAlternativeTitles(type, id, key) {
+    if (!id) return Promise.resolve([]);
+    if (type !== 'movie') {
+      return getTmdbTvDetails(id, key)
+        .then(data => data?.alternative_titles?.results || [])
+        .then(items => items.map(item => ({ title: String(item?.title || '').trim(), region: item?.iso_3166_1 || '', type: item?.type || '' })).filter(item => item.title));
+    }
+    const cacheKey = `${type}:${id}`;
+    if (tmdbAlternativeTitleCache.has(cacheKey)) return tmdbAlternativeTitleCache.get(cacheKey);
+    const request = requestTmdb(`${API.tmdb}/movie/${encodeURIComponent(id)}/alternative_titles`, key)
+      .then(data => data?.titles || [])
+      .then(items => items.map(item => ({ title: String(item?.title || '').trim(), region: item?.iso_3166_1 || '', type: item?.type || '' })).filter(item => item.title))
+      .catch(() => []);
+    tmdbAlternativeTitleCache.set(cacheKey, request);
+    return request;
+  }
+  // 标题无法直接匹配时，使用 TMDB 别名精确匹配前五个搜索结果
+  async function findTmdbAliasCandidate(data, info, type, key) {
+    const queryText = normalizeMovieText(info.title);
+    if (!queryText) return null;
+    const isMovie = type === 'movie';
+    for (const item of (data?.results || []).slice(0, 5)) {
+      const aliases = await getTmdbAlternativeTitles(type, item.id, key);
+      const alias = aliases.find(candidate => normalizeMovieText(candidate.title) === queryText);
+      if (!alias) continue;
+      const titleKey = isMovie ? 'title' : 'name';
+      return buildTmdbCandidates({ results: [{ ...item, [titleKey]: alias.title }] }, info, type)[0] || null;
+    }
+    return null;
+  }
   // 获取 TMDB 电影候选
   async function searchTmdbMovieCandidates(info, { preferTitle = false } = {}) {
     const key = await getTmdbKey();
@@ -469,8 +511,12 @@
     const queries = [...new Set(queryValues.map(value => String(value || '').trim()).filter(Boolean))];
     for (const queryText of queries) {
       const query = encodeURIComponent(queryText);
-      const candidates = buildTmdbCandidates(await requestTmdb(`${API.tmdb}/search/movie?language=zh-CN&region=CN&query=${query}`, key), { ...info, title: queryText }, 'movie');
+      const data = await requestTmdb(`${API.tmdb}/search/movie?language=zh-CN&region=CN&query=${query}`, key);
+      const queryInfo = { ...info, title: queryText };
+      const candidates = buildTmdbCandidates(data, queryInfo, 'movie');
       if (candidates.length) return candidates;
+      const aliasCandidate = await findTmdbAliasCandidate(data, queryInfo, 'movie', key);
+      if (aliasCandidate) return [aliasCandidate];
     }
     return [];
   }
@@ -531,7 +577,11 @@
     const key = await getTmdbKey();
     if (!key || !info.title) return [];
     const query = encodeURIComponent(info.title);
-    return buildTmdbCandidates(await requestTmdb(`${API.tmdb}/search/tv?language=zh-CN&region=CN&query=${query}`, key), info, 'tv');
+    const data = await requestTmdb(`${API.tmdb}/search/tv?language=zh-CN&region=CN&query=${query}`, key);
+    const candidates = buildTmdbCandidates(data, info, 'tv');
+    if (candidates.length) return candidates;
+    const aliasCandidate = await findTmdbAliasCandidate(data, info, 'tv', key);
+    return aliasCandidate ? [aliasCandidate] : [];
   }
   // 获取最佳 TMDB 剧集候选
   async function searchTmdbTv(info) {
@@ -542,7 +592,7 @@
   async function getTmdbTvSeasons(tvId) {
     const key = await getTmdbKey();
     if (!key || !tvId) return [];
-    const data = await requestTmdb(`${API.tmdb}/tv/${encodeURIComponent(tvId)}?language=zh-CN`, key);
+    const data = await getTmdbTvDetails(tvId, key);
     return (data?.seasons || []).map(season => ({ season: Number(season.season_number), total: Number(season.episode_count) || 0, name: season.name || '', year: String(season.air_date || '').slice(0, 4) })).filter(season => Number.isFinite(season.season) && season.season >= 0);
   }
   // 判断视频文件大小
@@ -2704,10 +2754,10 @@
     overlay.className = 'gyh-rename-overlay';
     overlay.innerHTML = `
       <section class="gyh-rename-modal gyh-search-modal" role="dialog" aria-modal="true" aria-labelledby="gyh-search-title">
-        ${modalHeader({ id: 'gyh-search-title', icon: ICONS.search, title: '搜索资源', subtitle: '聚合搜索迅雷/阿里/百度/夸克/磁力等资源', closeLabel: '关闭搜索资源' })}
+        ${modalHeader({ id: 'gyh-search-title', icon: ICONS.search, title: '搜索资源', subtitle: '聚合搜索迅雷/光鸭/磁力等资源', closeLabel: '关闭搜索资源' })}
         <div class="gyh-rename-body">
           <div class="gyh-search-bar">
-            <input class="gyh-rename-input gyh-search-input" type="text" placeholder="输入关键词搜索资源（支持迅雷/阿里/百度/夸克/磁力等）" aria-label="搜索关键词">
+            <input class="gyh-rename-input gyh-search-input" type="text" placeholder="输入关键词搜索资源（支持迅雷/光鸭/磁力等）" aria-label="搜索关键词">
             <button class="gyh-rename-btn gyh-search-btn" type="button" data-search-start>搜索</button>
           </div>
           <div class="gyh-search-tabs" data-search-tabs hidden></div>
@@ -2917,7 +2967,6 @@
         assistantAction({ action: null, attribute: 'data-xunlei-export', icon: ICONS.export, name: '导出秒传文件', note: '将文件/夹生成秒传文件' }),
         assistantAction({ action: 'search', icon: ICONS.search, name: '搜索资源', note: '聚合搜索迅雷/阿里/夸克/磁力等' }),
       ].join('');
-      root.querySelector('.gyh-transfer-panel').remove();
     }
     const trigger = root.querySelector('.gyh-trigger');
     const panel = root.querySelector('.gyh-panel');
