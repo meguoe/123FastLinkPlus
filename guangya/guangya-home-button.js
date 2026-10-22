@@ -48,14 +48,16 @@
   host.id = 'guangya-cloud-assistant-host';
   host.style.display = 'contents';
   let dropdown, destroyed = false, scheduled = false, lastState;
-  const directoryNames = ['电影', '剧集', '动漫', '动画', '更新中'];
+  // 偏好顺序；未列出的目录按服务端顺序排在后面，缺失的跳过
+  const directoryOrder = ['电影', '剧集', '动漫', '动画', '更新中'];
+  const directoryRank = name => { const index = directoryOrder.indexOf(name); return index < 0 ? directoryOrder.length : index; };
   const categoryPaths = ['all', 'recent', 'video', 'img', 'audio', 'doc', 'pkg'].map(path => '#/home/' + path);
   const shortcuts = document.createElement('nav');
   shortcuts.id = 'guangya-directory-shortcuts';
   shortcuts.setAttribute('aria-label', '目录快捷入口');
   const shortcutController = new AbortController();
   let shortcutBar, shortcutRequire, shortcutLoading, shortcutLoaded = false, shortcutError = '', shortcutOpening = false;
-  let directoryIds = new Map();
+  let directoryItems = [], shortcutKey = '';
 
   function loadDirectories() {
     if (shortcutLoading) return shortcutLoading;
@@ -66,7 +68,7 @@
         if (!shortcutRequire) window.webpackChunk_swangpan_pc?.push([['guangya-shortcuts-' + Date.now()], {}, value => { shortcutRequire = value; }]);
         const request = shortcutRequire?.(34118)?.E;
         if (typeof request !== 'function') throw Error('当前应用版本的目录请求接口不兼容');
-        const found = new Map(directoryNames.map(name => [name, []])), pages = new Set();
+        const found = [], seen = new Set(), pages = new Set();
         let count = 0;
         for (let page = 0; ; page++) {
           const response = await request('/userres/v1/file/get_file_list', { method: 'POST',
@@ -81,13 +83,14 @@
           const fingerprint = JSON.stringify(list.map(file => file.fileId));
           if (pages.has(fingerprint)) throw Error('快捷目录分页重复，请重试');
           pages.add(fingerprint);
-          for (const file of list) if (file.resType === 2 && found.has(file.fileName) && typeof file.fileId === 'string' && file.fileId) {
-            found.get(file.fileName).push(file.fileId);
+          for (const file of list) if (file.resType === 2 && typeof file.fileId === 'string' && file.fileId && !seen.has(file.fileId)) {
+            seen.add(file.fileId);
+            found.push({ id: file.fileId, name: typeof file.fileName === 'string' && file.fileName ? file.fileName : '未命名目录' });
           }
           count += list.length;
           if (Number.isFinite(data.total) && count >= data.total) break;
         }
-        directoryIds = found; shortcutLoaded = true;
+        directoryItems = found.sort((a, b) => directoryRank(a.name) - directoryRank(b.name)); shortcutLoaded = true;
         return true;
       } catch (error) {
         if (!destroyed) shortcutError = error.message || '读取快捷目录失败';
@@ -97,18 +100,11 @@
     schedule();
     return shortcutLoading;
   }
-  async function openDirectory(name) {
-    if (destroyed || shortcutLoading || shortcutOpening) return;
-    if (!shortcutLoaded) await loadDirectories();
-    if (destroyed) return;
-    const ids = directoryIds.get(name) || [];
-    if (!shortcutLoaded || ids.length !== 1) {
-      window.__guangyaMessage.error(shortcutError || (ids.length ? `${name}存在同名目录，无法确定目标` : `未找到${name}目录`));
-      return;
-    }
+  async function openDirectory(id) {
+    if (destroyed || shortcutOpening) return;
     shortcutOpening = true; schedule();
     try {
-      const response = await window.api.file.locateCloudFileInMain(ids[0], { includeSelf: true });
+      const response = await window.api.file.locateCloudFileInMain(id, { includeSelf: true });
       if (!response?.ok) throw Error(response?.msg || '打开快捷目录失败');
     } catch (error) { if (!destroyed) window.__guangyaMessage.error(error.message || '打开快捷目录失败'); }
     finally { shortcutOpening = false; if (!destroyed) schedule(); }
@@ -119,29 +115,38 @@
     const links = group ? [...group.children].filter(node => node.tagName === 'A') : [];
     const bar = group;
     if (shortcutBar !== bar) { shortcutBar?.removeAttribute('data-guangya-shortcut-bar'); shortcutBar = bar; }
-    if (!bar) { shortcuts.remove(); return; }
+    if (!bar) { shortcuts.remove(); shortcutKey = ''; return; }
     bar.setAttribute('data-guangya-shortcut-bar', '');
     const sample = links.find(link => link.getAttribute('aria-current') !== 'page' && !link.classList.contains('active'));
-    if (!sample) { shortcuts.remove(); return; }
+    if (!sample) { shortcuts.remove(); shortcutKey = ''; return; }
     if (shortcuts.className !== group.className) shortcuts.className = group.className;
-    if (!shortcuts.children.length) for (const name of directoryNames) {
-      const link = sample.cloneNode(false);
-      link.removeAttribute('href'); link.removeAttribute('data-discover'); link.removeAttribute('aria-current');
-      link.setAttribute('role', 'button');
-      const label = document.createElement('div'); label.textContent = name; link.append(label);
-      link.addEventListener('click', () => openDirectory(name));
-      link.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDirectory(name); }
-      });
-      shortcuts.append(link);
+    const entries = shortcutLoaded ? directoryItems.map(item => ({ kind: 'dir', id: item.id, name: item.name }))
+      : shortcutError ? [{ kind: 'retry', name: '目录读取失败' }] : [];
+    const signature = entries.map(entry => entry.id || entry.kind).join('|');
+    if (signature !== shortcutKey) {
+      shortcutKey = signature;
+      shortcuts.replaceChildren();
+      for (const entry of entries) {
+        const link = sample.cloneNode(false);
+        link.removeAttribute('href'); link.removeAttribute('data-discover'); link.removeAttribute('aria-current');
+        link.setAttribute('role', 'button');
+        link.dataset.guangyaShortcutKind = entry.kind;
+        if (entry.id) link.dataset.guangyaShortcutId = entry.id;
+        const label = document.createElement('div'); label.textContent = entry.name; link.append(label);
+        const activate = () => entry.kind === 'retry' ? loadDirectories() : openDirectory(entry.id);
+        link.addEventListener('click', activate);
+        link.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); }
+        });
+        shortcuts.append(link);
+      }
     }
     for (const [index, link] of [...shortcuts.children].entries()) {
-      const name = directoryNames[index], ids = directoryIds.get(name) || [];
-      const disabled = !!shortcutLoading || shortcutOpening || shortcutLoaded && ids.length !== 1;
+      const entry = entries[index];
+      const disabled = !!shortcutOpening;
       if (link.className !== sample.className) link.className = sample.className;
       link.setAttribute('aria-disabled', String(disabled)); link.tabIndex = disabled ? -1 : 0;
-      link.title = shortcutLoading ? '正在读取目录' : shortcutError ? `${shortcutError}，点击重试` :
-        shortcutLoaded && ids.length !== 1 ? ids.length ? `${name}存在同名目录` : `未找到${name}目录` : name;
+      link.title = entry.kind === 'retry' ? `${shortcutError}，点击重试` : entry.name;
     }
     if (group.lastElementChild !== shortcuts) group.append(shortcuts);
     if (!shortcutLoaded && !shortcutLoading && !shortcutError) loadDirectories();
