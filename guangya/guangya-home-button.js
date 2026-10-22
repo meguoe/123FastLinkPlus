@@ -6,14 +6,16 @@
   const style = document.createElement('style');
   style.textContent = `
     main [data-guangya-home-recent-hidden] { display:none !important; }
-    [data-guangya-shortcut-bar] { flex-wrap:wrap; }
-    [data-guangya-shortcut-bar] > a[href="#/home/video"],
-    [data-guangya-shortcut-bar] > a[href="#/home/img"],
-    [data-guangya-shortcut-bar] > a[href="#/home/audio"],
-    [data-guangya-shortcut-bar] > a[href="#/home/doc"],
-    [data-guangya-shortcut-bar] > a[href="#/home/pkg"] { display:none !important; }
+    [data-guangya-shortcut-bar] { flex-wrap:wrap; flex:1; min-width:0; }
+    [data-guangya-shortcut-bar="configured"] > a[href="#/home/video"],
+    [data-guangya-shortcut-bar="configured"] > a[href="#/home/img"],
+    [data-guangya-shortcut-bar="configured"] > a[href="#/home/audio"],
+    [data-guangya-shortcut-bar="configured"] > a[href="#/home/doc"],
+    [data-guangya-shortcut-bar="configured"] > a[href="#/home/pkg"] { display:none !important; }
     #guangya-directory-shortcuts { display:contents; }
     #guangya-directory-shortcuts [aria-disabled="true"] { opacity:.45; cursor:not-allowed; }
+    #guangya-shortcut-settings { margin-inline-start:auto; display:flex; align-items:center; justify-content:center; flex:none; min-width:36px; padding:8px; border:0; border-radius:6px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+    #guangya-shortcut-settings:disabled { opacity:.45; cursor:not-allowed; }
   `;
   document.head.append(style);
 
@@ -48,57 +50,48 @@
   host.id = 'guangya-cloud-assistant-host';
   host.style.display = 'contents';
   let dropdown, destroyed = false, scheduled = false, lastState;
-  // 偏好顺序；未列出的目录按服务端顺序排在后面，缺失的跳过
-  const directoryOrder = ['电影', '剧集', '动漫', '动画', '更新中'];
-  const directoryRank = name => { const index = directoryOrder.indexOf(name); return index < 0 ? directoryOrder.length : index; };
   const categoryPaths = ['all', 'recent', 'video', 'img', 'audio', 'doc', 'pkg'].map(path => '#/home/' + path);
   const shortcuts = document.createElement('nav');
   shortcuts.id = 'guangya-directory-shortcuts';
   shortcuts.setAttribute('aria-label', '目录快捷入口');
-  const shortcutController = new AbortController();
-  let shortcutBar, shortcutRequire, shortcutLoading, shortcutLoaded = false, shortcutError = '', shortcutOpening = false;
+  const settings = document.createElement('button');
+  settings.id = 'guangya-shortcut-settings'; settings.type = 'button';
+  settings.title = '配置快捷目录'; settings.setAttribute('aria-label', settings.title);
+  settings.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9.5 3-.6 2.2-2 .9-2.1-.6-2 3.5 1.6 1.6v2.8L2.8 15l2 3.5 2.1-.6 2 .9.6 2.2h4.9l.6-2.2 2-.9 2.1.6 2-3.5-1.6-1.6v-2.8L21.2 9l-2-3.5-2.1.6-2-.9-.6-2.2z"/><circle cx="12" cy="12" r="3"/></svg>';
+  settings.addEventListener('click', configureShortcuts);
+  const shortcutStorageKey = 'guangya-assistant-shortcut-directories';
   let directoryItems = [], shortcutKey = '';
-
-  function loadDirectories() {
-    if (shortcutLoading) return shortcutLoading;
-    shortcutError = '';
-    shortcutLoading = Promise.resolve().then(async () => {
-      try {
-        if (destroyed) return false;
-        if (!shortcutRequire) window.webpackChunk_swangpan_pc?.push([['guangya-shortcuts-' + Date.now()], {}, value => { shortcutRequire = value; }]);
-        const request = shortcutRequire?.(34118)?.E;
-        if (typeof request !== 'function') throw Error('当前应用版本的目录请求接口不兼容');
-        const found = [], seen = new Set(), pages = new Set();
-        let count = 0;
-        for (let page = 0; ; page++) {
-          const response = await request('/userres/v1/file/get_file_list', { method: 'POST',
-            body: { parentId: '1952368933809659951', page, pageSize: 100, resType: 2 },
-            signal: shortcutController.signal, extra: { skipSafeboxUnlock: true } });
-          if (destroyed) return false;
-          if (!response || response.code !== undefined && response.code !== 0) throw Error(response?.msg || '读取快捷目录失败');
-          const data = response.data;
-          const list = data && Object.keys(data).length === 0 ? [] : data?.list;
-          if (!Array.isArray(list)) throw Error('快捷目录列表格式不兼容');
-          if (!list.length) break;
-          const fingerprint = JSON.stringify(list.map(file => file.fileId));
-          if (pages.has(fingerprint)) throw Error('快捷目录分页重复，请重试');
-          pages.add(fingerprint);
-          for (const file of list) if (file.resType === 2 && typeof file.fileId === 'string' && file.fileId && !seen.has(file.fileId)) {
-            seen.add(file.fileId);
-            found.push({ id: file.fileId, name: typeof file.fileName === 'string' && file.fileName ? file.fileName : '未命名目录' });
-          }
-          count += list.length;
-          if (Number.isFinite(data.total) && count >= data.total) break;
-        }
-        directoryItems = found.sort((a, b) => directoryRank(a.name) - directoryRank(b.name)); shortcutLoaded = true;
-        return true;
-      } catch (error) {
-        if (!destroyed) shortcutError = error.message || '读取快捷目录失败';
-        return false;
-      } finally { shortcutLoading = null; if (!destroyed) schedule(); }
+  let shortcutBar, shortcutOpening = false, shortcutConfiguring = false;
+  function validateDirectories(value) {
+    if (!Array.isArray(value) || value.length > 5) throw Error('快捷目录最多选择 5 项');
+    const ids = new Set();
+    return value.map(item => {
+      if (!item || typeof item.id !== 'string' || !/^\d+$/.test(item.id) ||
+          typeof item.name !== 'string' || !item.name.trim() || ids.has(item.id) ||
+          item.path !== undefined && typeof item.path !== 'string') throw Error('快捷目录配置无效，请重新选择');
+      ids.add(item.id);
+      return { id: item.id, name: item.name, path: item.path || item.name };
     });
-    schedule();
-    return shortcutLoading;
+  }
+  try {
+    const saved = window.localStorage.getItem(shortcutStorageKey);
+    if (saved !== null) directoryItems = validateDirectories(JSON.parse(saved));
+  } catch (error) { console.warn(prefix, '读取快捷目录配置失败', error.message); }
+
+  async function configureShortcuts() {
+    if (destroyed || shortcutConfiguring) return;
+    shortcutConfiguring = true; schedule();
+    try {
+      if (!window.__guangyaFolderBrowser?.select) throw Error('目录选择组件未加载，请通过启动器重新注入');
+      const selection = await window.__guangyaFolderBrowser.select(directoryItems.map(item => ({ ...item })));
+      if (destroyed) return;
+      const next = validateDirectories(selection);
+      try { window.localStorage.setItem(shortcutStorageKey, JSON.stringify(next)); }
+      catch { throw Error('快捷目录配置保存失败，请重试'); }
+      directoryItems = next;
+    } catch (error) {
+      if (!destroyed && error !== 'cancel folder select') window.__guangyaMessage.error(error?.message || '配置快捷目录失败');
+    } finally { shortcutConfiguring = false; if (!destroyed) schedule(); }
   }
   async function openDirectory(id) {
     if (destroyed || shortcutOpening) return;
@@ -115,14 +108,13 @@
     const links = group ? [...group.children].filter(node => node.tagName === 'A') : [];
     const bar = group;
     if (shortcutBar !== bar) { shortcutBar?.removeAttribute('data-guangya-shortcut-bar'); shortcutBar = bar; }
-    if (!bar) { shortcuts.remove(); shortcutKey = ''; return; }
-    bar.setAttribute('data-guangya-shortcut-bar', '');
+    if (!bar) { shortcuts.remove(); settings.remove(); shortcutKey = ''; return; }
+    bar.setAttribute('data-guangya-shortcut-bar', directoryItems.length ? 'configured' : '');
     const sample = links.find(link => link.getAttribute('aria-current') !== 'page' && !link.classList.contains('active'));
-    if (!sample) { shortcuts.remove(); shortcutKey = ''; return; }
+    if (!sample) { shortcuts.remove(); settings.remove(); shortcutKey = ''; return; }
     if (shortcuts.className !== group.className) shortcuts.className = group.className;
-    const entries = shortcutLoaded ? directoryItems.map(item => ({ kind: 'dir', id: item.id, name: item.name }))
-      : shortcutError ? [{ kind: 'retry', name: '目录读取失败' }] : [];
-    const signature = entries.map(entry => entry.id || entry.kind).join('|');
+    const entries = directoryItems;
+    const signature = JSON.stringify(entries);
     if (signature !== shortcutKey) {
       shortcutKey = signature;
       shortcuts.replaceChildren();
@@ -130,10 +122,10 @@
         const link = sample.cloneNode(false);
         link.removeAttribute('href'); link.removeAttribute('data-discover'); link.removeAttribute('aria-current');
         link.setAttribute('role', 'button');
-        link.dataset.guangyaShortcutKind = entry.kind;
+        link.dataset.guangyaShortcutKind = 'dir';
         if (entry.id) link.dataset.guangyaShortcutId = entry.id;
         const label = document.createElement('div'); label.textContent = entry.name; link.append(label);
-        const activate = () => entry.kind === 'retry' ? loadDirectories() : openDirectory(entry.id);
+        const activate = () => openDirectory(entry.id);
         link.addEventListener('click', activate);
         link.addEventListener('keydown', event => {
           if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); }
@@ -146,10 +138,11 @@
       const disabled = !!shortcutOpening;
       if (link.className !== sample.className) link.className = sample.className;
       link.setAttribute('aria-disabled', String(disabled)); link.tabIndex = disabled ? -1 : 0;
-      link.title = entry.kind === 'retry' ? `${shortcutError}，点击重试` : entry.name;
+      link.title = entry.path;
     }
-    if (group.lastElementChild !== shortcuts) group.append(shortcuts);
-    if (!shortcutLoaded && !shortcutLoading && !shortcutError) loadDirectories();
+    if (settings.className !== sample.className) settings.className = sample.className;
+    settings.disabled = shortcutConfiguring;
+    if (shortcuts.parentElement !== group || group.lastElementChild !== settings) group.append(shortcuts, settings);
   }
 
   async function perform(action) {
@@ -213,7 +206,7 @@
     destroy() {
       if (destroyed) return;
       destroyed = true; observer.disconnect(); dropdown?.destroy(); host.remove(); style.remove();
-      shortcutController.abort(); shortcuts.remove(); shortcutBar?.removeAttribute('data-guangya-shortcut-bar');
+      shortcuts.remove(); settings.remove(); shortcutBar?.removeAttribute('data-guangya-shortcut-bar');
       for (const node of hidden) node.removeAttribute('data-guangya-home-recent-hidden');
       hidden.clear();
       if (window[key] === api) delete window[key];
