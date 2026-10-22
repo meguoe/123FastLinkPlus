@@ -426,6 +426,7 @@
     if (current.error) throw Error(current.error);
     const result = { success: 0, failed: 0, skipped: 0, pending: 0 };
     const directories = new Map(), destinations = new Map(), batches = new Map();
+    let unchanged = 0;
     async function ensureDirectory(parent, name) {
       const cacheKey = JSON.stringify([parent, name]);
       if (directories.has(cacheKey)) return directories.get(cacheKey);
@@ -499,22 +500,30 @@
       try {
         const showId = await ensureDirectory(parentId, item.folderName);
         const targetId = isMovie ? showId : await ensureDirectory(showId, item.seasonName);
+        if (String(item.file.parentId ?? '') === targetId && nameOf(item.file) === item.newName) {
+          destinations.set(item, targetId);
+          unchanged++; result.skipped++; update('skipped', '已在目标位置且名称正确，无需移动或重命名');
+          continue;
+        }
+        let targetFiles;
         if (isMovie) {
-          const targetFiles = await listFiles(targetId, request);
+          targetFiles = await listFiles(targetId, request);
           if (targetFiles.some(file => idOf(file) !== idOf(item.file) && [item.newName, nameOf(item.file)].includes(nameOf(file)))) throw Error('目标目录已有同名文件，已跳过以避免覆盖');
           if (!targetFiles.some(file => idOf(file) === idOf(item.file))) {
-            const source = (await listFiles(String(item.file.parentId), request)).find(file => idOf(file) === idOf(item.file));
+            const parent = String(item.file.parentId);
+            const source = (await listFiles(parent, request)).find(file => idOf(file) === idOf(item.file));
             if (!source || nameOf(source) !== nameOf(item.file)) throw Error('源文件已变化，请重新扫描');
             const data = await post(request, '/userres/v1/file/move_file', { fileIds: [idOf(item.file)], parentId: targetId });
             await waitTask(data, request, pause);
-            if (!(await listFiles(targetId, request)).some(file => idOf(file) === idOf(item.file))) throw Error('移动结果未确认，请刷新后核对');
+            targetFiles = await listFiles(targetId, request);
+            if (!targetFiles.some(file => idOf(file) === idOf(item.file))) throw Error('移动结果未确认，请刷新后核对');
           }
         } else {
           const batch = await moveTvBatch(item, targetId);
           if (batch.stopped) { result.pending = current.items.length - index; break; }
           if (batch.errors.has(item)) throw Error(batch.errors.get(item));
+          targetFiles = await listFiles(targetId, request);
         }
-        const targetFiles = await listFiles(targetId, request);
         if (!isMovie && targetFiles.some(file => idOf(file) !== idOf(item.file) && [item.newName, nameOf(item.file)].includes(nameOf(file)))) throw Error('目标目录已有同名文件，已跳过以避免覆盖');
         const moved = targetFiles.find(file => idOf(file) === idOf(item.file));
         if (!moved) throw Error('目标文件缺失，请刷新后核对');
@@ -527,7 +536,7 @@
         result.success++; update('success');
       } catch (error) { result.failed++; update('failed', error.message); }
     }
-    if (current.items.length && result.success === current.items.length && !shouldStop()) {
+    if (current.items.length && result.success + unchanged === current.items.length && !shouldStop()) {
       const cleanup = result.cleanup = { deleted: 0, retained: [], failed: [] };
       const protectedIds = new Set([parentId, ...directories.values()]);
       const processedDirs = new Set();
