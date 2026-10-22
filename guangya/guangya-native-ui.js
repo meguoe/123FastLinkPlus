@@ -393,5 +393,7 @@
     try { render(); return handle; } catch (error) { handle.destroy(); throw error; }
   }
 
-  window[key] = { mountTextArea, mountInput, mountButton, mountTooltip, mountSelect, mountSwitch, mountTag, mountCard, mountCollapse, mountDropdown, mountSegmented, destroy() { destroyed = true; for (const instance of [...instances]) instance.destroy(); if (window[key] === this) delete window[key]; } };
+  window[key] = { mountTextArea, mountInput, mountButton, mountTooltip, mountSelect, mountSwitch, mountTag, mountCard, mountCollapse, mountDropdown, mountSegmented,
+    getFolderBrowserRuntime() { return { ...resolveRuntime(), ...resolveBundledComponents(), getThemeProviders: themeProviders }; },
+    destroy() { destroyed = true; for (const instance of [...instances]) instance.destroy(); if (window[key] === this) delete window[key]; } };
 })();

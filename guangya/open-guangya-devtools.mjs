@@ -66,6 +66,7 @@ function buildSegmentedSource() {
   const collapse = collect(resolve('antd/lib/collapse'));
   const tag = collect(resolve('antd/lib/tag'));
   const tooltip = collect(resolve('antd/lib/tooltip'));
+  const breadcrumb = collect(resolve('antd/lib/breadcrumb'));
   const statusIcons = Object.fromEntries(Object.entries({ success: 'CheckCircleOutlined', processing: 'SyncOutlined', error: 'CloseCircleOutlined', default: 'ClockCircleOutlined' }).map(([status, name]) => [status, collect(resolve('@ant-design/icons/lib/icons/' + name))]));
   const provider = collect(resolve('antd/lib/config-provider'));
   return `window.__guangyaLoadSegmented = runtime => {
@@ -79,7 +80,7 @@ function buildSegmentedSource() {
       factory(name => load(dependencies[name]), module, module.exports, {env:{NODE_ENV:'production'}});
       return module.exports;
     }
-    return {Segmented:load(${segmented}).default, Card:load(${card}).default, Collapse:load(${collapse}).default, Tag:load(${tag}).default, Tooltip:load(${tooltip}).default, StatusIcons:Object.fromEntries(Object.entries(${JSON.stringify(statusIcons)}).map(([status,id])=>[status,load(id).default])), ConfigProvider:load(${provider}).default};
+    return {Segmented:load(${segmented}).default, Card:load(${card}).default, Collapse:load(${collapse}).default, Tag:load(${tag}).default, Tooltip:load(${tooltip}).default, Breadcrumb:load(${breadcrumb}).default, StatusIcons:Object.fromEntries(Object.entries(${JSON.stringify(statusIcons)}).map(([status,id])=>[status,load(id).default])), ConfigProvider:load(${provider}).default};
   };`;
 }
 
@@ -131,6 +132,7 @@ async function installScripts(source, installBridge) {
 }
 
 const rendererGuard = `(() => {
+  if (document.querySelector('[data-guangya-folder-browser]')) return { skipped: true, reason: '目录弹窗正在使用，请先关闭弹窗' };
   if (document.getElementById('guangya-tmdb-config-dialog')) return { skipped: true, reason: 'TMDB 密钥配置弹窗正在使用' };
   if (document.getElementById('guangya-movie-tmdb-config-dialog')) return { skipped: true, reason: 'TMDB 密钥配置弹窗正在使用' };
   if (document.getElementById('guangya-movie-dialog')) return { skipped: true, reason: '整理电影弹窗正在使用' };
@@ -142,7 +144,7 @@ const rendererGuard = `(() => {
   }
 })();\n`;
 const rendererScripts = await Promise.all([
-  './guangya-file-list.js', './guangya-file-sort.js', './guangya-message.js', './guangya-modal.js', './guangya-native-ui.js', './guangya-json-editor.js', './guangya-export.js', './guangya-import.js', './guangya-tv.js',  './guangya-rename.js', './guangya-home-button.js'].map(path => readFile(new URL(path, import.meta.url), 'utf8')));
+  './guangya-file-list.js', './guangya-file-sort.js', './guangya-message.js', './guangya-modal.js', './guangya-native-ui.js', './guangya-folder-browser.js', './guangya-json-editor.js', './guangya-export.js', './guangya-import.js', './guangya-tv.js',  './guangya-rename.js', './guangya-home-button.js'].map(path => readFile(new URL(path, import.meta.url), 'utf8')));
 const rendererSource = `(() => {
   const protection = ${rendererGuard}
   if (protection) return protection;
@@ -150,6 +152,20 @@ const rendererSource = `(() => {
   ${rendererScripts.slice(0, -1).join('\n')}
   return ${rendererScripts.at(-1)}
 })()`;
+
+// Serialized into Electron's main process; prefer the main window over login/tools.
+function bringAppToFront() {
+  const { app, BrowserWindow } = process.mainModule.require('electron');
+  const windows = BrowserWindow.getAllWindows().filter(window => !window.isDestroyed() && !window.webContents.isDestroyed());
+  const main = windows.find(window => /\/main\.html(?:[?#]|$)/.test(window.webContents.getURL()))
+    || windows.find(window => /\/login\.html(?:[?#]|$)/.test(window.webContents.getURL()));
+  if (!main) return false;
+  if (main.isMinimized()) main.restore();
+  main.show();
+  app.focus({ steal: true });
+  main.focus();
+  return true;
+}
 
 function isAppRunning(run = execFileSync) {
   try {
@@ -161,7 +177,48 @@ function isAppRunning(run = execFileSync) {
   }
 }
 
-const attach = process.argv.includes('--attach') || isAppRunning();
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function findInspectorTarget() {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(500) });
+    if (!response.ok) throw Error('Inspector 返回 HTTP ' + response.status);
+    const targets = await response.json();
+    if (!Array.isArray(targets)) throw Error('Inspector 返回格式异常');
+    const target = targets.find(item => item.type === 'node');
+    if (!target) throw Error('端口 9237 已被其他服务占用');
+    return target;
+  } catch (error) {
+    if (error.cause?.code === 'ECONNREFUSED') return null;
+    throw error;
+  }
+}
+
+async function quitUnmanagedApp() {
+  // NSRunningApplication.terminate requests normal quit; never force-terminate.
+  execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', `
+    ObjC.import('AppKit');
+    const applications = $.NSWorkspace.sharedWorkspace.runningApplications;
+    for (let i = 0; i < applications.count; i++) {
+      const application = applications.objectAtIndex(i);
+      if (ObjC.unwrap(application.executableURL.path) === ${JSON.stringify(executable)} && !application.terminate) {
+        throw Error('光鸭云盘拒绝退出');
+      }
+    }
+  `], { encoding: 'utf8', timeout: 3000 });
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (!isAppRunning()) return;
+    await delay(200);
+  }
+  throw Error('等待光鸭云盘正常退出超时，请处理应用中的退出提示后重试；未强制结束进程');
+}
+
+// Explicit attach and system magnet events must never restart an existing client.
+let attach = process.argv.includes('--attach') || isAppRunning();
+if (attach && !process.argv.includes('--attach') && !magnetLinks.length && !await findInspectorTarget()) {
+  console.log('光鸭云盘未通过助手启动，正在正常退出后重启…');
+  await quitUnmanagedApp();
+  attach = false;
+}
 console.log(attach ? '光鸭云盘已运行，正在 attach…' : '光鸭云盘未运行，正在启动…');
 if (!attach) {
   await new Promise((resolve, reject) => {
@@ -175,16 +232,10 @@ if (!attach) {
   await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
   child.unref();
 }
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 let target;
 for (let attempt = 0; attempt < 100; attempt++) {
-  try {
-    const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`, {
-      signal: AbortSignal.timeout(500),
-    })).json();
-    target = targets.find(item => item.type === 'node');
-    if (target) break;
-  } catch { }
+  target = await findInspectorTarget();
+  if (target) break;
   await delay(200);
 }
 if (!target) throw new Error(attach
@@ -255,6 +306,15 @@ try {
   }
   if (!windows?.length) throw new Error('等待光鸭云盘窗口超时');
   console.log(JSON.stringify(windows));
+  if (!magnetLinks.length && !process.argv.includes('--attach')) {
+    let foreground;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      foreground = await evaluate(`(${bringAppToFront.toString()})()`);
+      if (foreground) break;
+      await delay(200);
+    }
+    if (!foreground) throw Error('未找到光鸭云盘主窗口或登录窗口，无法唤到前台');
+  }
   const clipboard = await evaluate(`(() => {
     const restrictMagnetClipboard = ${restrictMagnetClipboard.toString()};
     const locateMagnetClipboard = ${locateMagnetClipboard.toString()};
