@@ -10,6 +10,7 @@
   const defaultFields = isMovie ? ['影片名', '上映时间', '分辨率', '视频编码', '音频编码', '来源', 'TMDB'] : ['剧集名', '季集信息', '上映时间', '分辨率', '来源', '视频编码', '音频编码'];
   const allowedFields = [...new Set([...defaultFields, 'TMDB'])];
   const storageKey = 'guangya-assistant-tmdb-key';
+  const minimumVideoSize = (isMovie ? 10 : 1) * 1024 ** 2;
   const video = /\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|ts|m2ts|mts|rmvb|rm|mpg|mpeg|vob|3gp|iso)$/i;
   const validName = name => typeof name === 'string' && !!name.trim() && name === name.trim() && !/[<>:"/\\|?*\x00-\x1f]/.test(name) && !/[. ]$/.test(name) && name !== '.' && name !== '..';
   const idOf = file => String(file?.fileId ?? file?.id ?? '');
@@ -344,7 +345,7 @@
           if (visited.has(idOf(file))) continue;
           visited.add(idOf(file));
           const size = Number(file.fileSize ?? file.size ?? file.fileSizeByte ?? file.file_size ?? 0);
-          if ((file.fileType === 2 || video.test(nameOf(file))) && size > 10 * 1024 ** 2) {
+          if ((file.fileType === 2 || video.test(nameOf(file))) && size > minimumVideoSize) {
             entries.push({ file, sourcePath: `${sourceDirectory}/${nameOf(file)}`, info: parseEpisode(nameOf(file), nameOf(folder)) });
             onProgress(`正在扫描 ${nameOf(folder)} · ${entries.length} 集`);
           }
@@ -357,7 +358,7 @@
       else if (tmdbIds.size === 1) info.tmdbId = [...tmdbIds][0];
       const group = { folder, info, entries, match: null, seasons: [], candidates: [], error: '', scanned: false };
       groups.push(group); onUpdate(groups);
-      if (!entries.length) { group.error = '没有大于 10MB 的视频'; group.scanned = true; onUpdate(groups); continue; }
+      if (!entries.length) { group.error = '没有大于 1MiB 的视频'; group.scanned = true; onUpdate(groups); continue; }
       onProgress(`正在匹配 ${info.title}`);
       try {
         await matchGroup(group, tmdb);
@@ -380,7 +381,7 @@
         return;
       }
       const size = Number(resource.fileSize ?? resource.size ?? resource.fileSizeByte ?? resource.file_size ?? 0);
-      if (!(resource.fileType === 2 || video.test(nameOf(resource))) || !(size > 10 * 1024 ** 2)) return;
+      if (!(resource.fileType === 2 || video.test(nameOf(resource))) || !(size > minimumVideoSize)) return;
       const entry = {
         file: resource, sourcePath: [...path, nameOf(resource)].join('/'),
         sourceDirName: ancestors[0] ? nameOf(ancestors[0]) : '',
@@ -549,7 +550,7 @@
           if (Number(file.resType) === 2) { if (!await safeToDelete(idOf(file))) return false; }
           else if (file.fileType === 2 || video.test(nameOf(file))) {
             const size = Number(file.fileSize ?? file.size ?? file.fileSizeByte ?? file.file_size ?? NaN);
-            if (!Number.isFinite(size) || size > 10 * 1024 ** 2) return false;
+            if (!Number.isFinite(size) || size > minimumVideoSize) return false;
           }
         }
         return true;
@@ -1016,7 +1017,7 @@
       card.body.append(header);
       try { current = makePlan(groups, ruleInput.value); }
       catch (error) { current = { items: [], changed: 0, error: error.message }; }
-      summary.textContent = current.error || (scanned && isMovie && !groups.length ? '未找到大于 10MB 的视频' : scanned ? `匹配 ${groups.filter(group => group.match).length}/${groups.length} 部 · 可整理 ${current.changed} ${unit} · 确认后才会修改文件` : `已选中 ${folders.length} 个${isMovie ? '文件或文件夹' : '文件夹'}`);
+      summary.textContent = current.error || (scanned && isMovie && !groups.length ? '未找到大于 10MiB 的视频' : scanned ? `匹配 ${groups.filter(group => group.match).length}/${groups.length} 部 · 可整理 ${current.changed} ${unit} · 确认后才会修改文件` : `已选中 ${folders.length} 个${isMovie ? '文件或文件夹' : '文件夹'}`);
       const previewGroups = scanned || (isMovie && groups.length) ? groups : folders.map(folder => groups.find(group => idOf(group.folder) === idOf(folder)) || { folder, scanned: false });
       for (const [index, group] of previewGroups.entries()) {
         const complete = scanned || group.scanned;
