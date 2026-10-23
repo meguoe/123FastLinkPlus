@@ -786,13 +786,14 @@
               if (progress.status !== 'processing') { count.completed++; if (progress.status === 'success') count.success++; if (progress.status === 'failed') count.failed++; }
               groupProgress.set(group, count);
               setGroupStatus(group, '整理中');
-              if (progress.status === 'failed') { summary.title = progress.reason; groupRows.get(group).element.title = progress.reason; }
+              if (progress.status === 'failed') groupRows.get(group).element.title = progress.reason;
               summary.textContent = `成功 ${progress.success} · 失败 ${progress.failed} · 跳过 ${progress.skipped}`;
             },
           });
           const cleanup = result.cleanup;
-          summary.textContent = `成功 ${result.success} · 失败 ${result.failed} · 跳过 ${result.skipped} · 未处理 ${result.pending}` + (cleanup ? ` · 原目录删除 ${cleanup.deleted} · 保留 ${cleanup.retained.length} · 清理失败 ${cleanup.failed.length}` : '');
-          if (cleanup) summary.title = [...cleanup.retained, ...cleanup.failed].map(item => `${item.folder}：${item.reason}`).join('\n');
+          if (destroyed || !root.isConnected) return;
+          summary.textContent = `成功 ${result.success} · 失败 ${result.failed} · 跳过 ${result.skipped} · 未处理 ${result.pending} · 删除目录 ${cleanup?.deleted || 0} · 删除失败 ${cleanup?.failed.length || 0}`;
+          summary.removeAttribute('title');
           for (const group of groups) {
             const count = groupProgress.get(group) || { completed: 0, success: 0, failed: 0 };
             const total = current.items.filter(item => item.group === group).length;
