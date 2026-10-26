@@ -29,7 +29,7 @@ for (const [api, limit] of [[window.__guangyaTv, MiB], [window.__guangyaMovie, 1
     const file = { ...video('01', limit + 1), parentId: api === window.__guangyaTv ? 'season' : 'show' };
     const group = { folder, folderName: '目标', entries: [] };
     // Movie cleanup starts at the file's source directory; TV starts at group.folder.
-    const item = { file, group, newName: file.fileName, folderName: '目标', seasonName: 'Season 1',
+    const item = { file, group, newName: api === window.__guangyaTv ? '已整理.S01E01.mp4' : file.fileName, folderName: '目标', seasonName: 'Season 1',
       sourceAncestors: [{ id: 'src', name: '节目' }] };
     group.entries.push(item);
     const tree = { root: [folder, directory('show', '目标')], show: api === window.__guangyaTv ? [directory('season', 'Season 1')] : [file],
@@ -37,6 +37,7 @@ for (const [api, limit] of [[window.__guangyaTv, MiB], [window.__guangyaMovie, 1
     const deleted = [];
     const result = await api.execute({ items: [item] }, { parentId: 'root', request: async (path, { body }) => {
       if (path.endsWith('/get_file_list')) return { code: 0, data: { list: body.page ? [] : tree[body.parentId], total: tree[body.parentId].length } };
+      if (path.endsWith('/rename')) { file.fileName = body.newName; return { code: 0, data: {} }; }
       assert.ok(path.endsWith('/delete_file'), `Unexpected write: ${path}`);
       deleted.push(...body.fileIds);
       tree.root = tree.root.filter(file => !body.fileIds.includes(file.fileId));

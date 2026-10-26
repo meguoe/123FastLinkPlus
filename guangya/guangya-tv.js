@@ -450,11 +450,12 @@
     async function moveTvBatch(first, targetId) {
       const key = JSON.stringify([first.folderName, first.seasonName]);
       if (batches.has(key)) return batches.get(key);
-      const items = current.items.filter(item => !item.error && item.folderName === first.folderName && item.seasonName === first.seasonName);
+      const items = current.items.filter(item => !item.error && !(String(item.file.parentId ?? '') === targetId && nameOf(item.file) === item.newName) && item.folderName === first.folderName && item.seasonName === first.seasonName);
       const batch = { errors: new Map() };
       batches.set(key, batch);
       try {
         const targetFiles = await listFiles(targetId, request), sources = new Map(), moving = [];
+        batch.files = targetFiles;
         for (const item of items) {
           if (shouldStop()) { batch.stopped = true; return batch; }
           try {
@@ -484,6 +485,7 @@
           const data = await post(request, '/userres/v1/file/move_file', { fileIds: ready.map(item => idOf(item.file)), parentId: targetId });
           await waitTask(data, request, pause);
           const moved = await listFiles(targetId, request);
+          batch.files = moved;
           for (const item of ready) if (!moved.some(file => idOf(file) === idOf(item.file))) batch.errors.set(item, '移动结果未确认，请刷新后核对');
         }
       } catch (error) {
@@ -523,7 +525,7 @@
           const batch = await moveTvBatch(item, targetId);
           if (batch.stopped) { result.pending = current.items.length - index; break; }
           if (batch.errors.has(item)) throw Error(batch.errors.get(item));
-          targetFiles = await listFiles(targetId, request);
+          targetFiles = nameOf(item.file) === item.newName ? batch.files : await listFiles(targetId, request);
         }
         if (!isMovie && targetFiles.some(file => idOf(file) !== idOf(item.file) && [item.newName, nameOf(item.file)].includes(nameOf(file)))) throw Error('目标目录已有同名文件，已跳过以避免覆盖');
         const moved = targetFiles.find(file => idOf(file) === idOf(item.file));
