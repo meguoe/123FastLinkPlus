@@ -97,14 +97,23 @@ const nodesMap = Object.fromEntries([root, ...nodes].map(node => [node.key, node
 let resolved;
 const modal = { visible: true, resolve: value => { resolved = value; }, hide() {}, remove() {}, reject() {} };
 const NiceModal = { create: value => value, show: (next, initial) => { component = next; props = initial; } };
+const originalShow = NiceModal.show;
 const modules = { 23219: { aF: 'modal', $n: 'button', hr: 'tree' }, 92061: { Ay: NiceModal, hS: () => modal },
   5036: { gW: () => ({ treeData: [root], nodesMap, loading: false, saveEditing: async () => ({ ok: true }) }) },
-  25270: { jsx() {} }, 11814: { W: 'original' }, 65487: { oDp: { SAFEBOX: 20 } } };
+  25270: { jsx() {} }, 33446: { W: 'original' }, 65487: { oDp: { SAFEBOX: 20 } } };
 const requireModule = id => modules[id];
-requireModule.m = { 11814(module) { /* cancel folder select */ module.exports.W = 'replacement'; } };
+requireModule.m = { 33446(module) { /* cancel folder select; onCreateFolder; loadRootData */ module.exports.W = 'replacement'; } };
 const pickerWindow = { __guangyaNativeUI: { getFolderBrowserRuntime: () => ({ React, Input: 'input', Breadcrumb: 'breadcrumb', ConfigProvider: 'provider', getThemeProviders: () => [] }) },
   webpackChunk_swangpan_pc: { push: chunk => chunk[2](requireModule) } };
 vm.runInNewContext(pickerSource, { window: pickerWindow, document: { createElement: () => ({ remove() {} }), head: { append() {} } } });
+for (const title of ['移动到', '复制到']) {
+  NiceModal.show('original', { title });
+  assert.equal(component, 'replacement', `${title}须替换当前版本的目录弹窗`);
+}
+NiceModal.show('original', { title: '保存到' });
+assert.equal(component, 'original', '其他目录弹窗保持原样');
+NiceModal.show('other', { title: '移动到' });
+assert.equal(component, 'other', '其他组件保持原样');
 pickerWindow.__guangyaFolderBrowser.select([]);
 function render(type = component, values = props) {
   if (!buckets.has(type)) buckets.set(type, []);
@@ -135,3 +144,7 @@ const clear = find(render(), node => node.type === 'button' && node.children.inc
 clear.props.onClick();
 assert.equal(browser().props.selection.length, 0);
 console.log('ok 实际选择器第六项拒绝、禁用复选框、移除后追加、确认和清空');
+pickerWindow.__guangyaFolderBrowser.destroy();
+assert.equal(NiceModal.show, originalShow, '销毁后恢复原生弹窗');
+assert.equal(pickerWindow.__guangyaFolderBrowser, undefined);
+console.log('ok 新编号移动/复制替换、其他弹窗隔离、销毁恢复');

@@ -1,5 +1,19 @@
 # 光鸭云盘注入脚本：任务进度与接续说明
 
+## 光鸭 1.1.1 目录弹窗模块定位修复（2026-10-28）
+
+- 用户授权修复后，guangya-folder-browser.js 改为在当前主窗口 Webpack 工厂中按 cancel folder select、onCreateFolder、loadRootData 三个特征定位唯一目录弹窗。零匹配、多匹配仍报版本不兼容；原生组件引用与替换工厂共用查到的模块 ID，移除两处 11814 硬编码，并检查原生 W 导出。移动/复制、快捷目录、请求和云盘写入规则不变。
+- 新增 `node scripts/check-folder-module.mjs`，旧源码在新编号用例先复现原报错；修复后覆盖旧/新/未知编号、无匹配、多匹配、模块未加载及统一引用。现有 `node scripts/check-shortcut-settings.mjs` 的模拟目录模块改用 33446，并覆盖移动/复制替换、其他弹窗隔离、销毁恢复；原有选择/保存/取消/清空/上限检查继续通过。源码语法、构建内全部注入脚本语法与 `git diff --check` 通过。
+- `node open-guangya-devtools.mjs --attach` 在现有光鸭 1.1.1 成功注入，返回 installed=true/homeActive=true。校验 Inspector 的 process.execPath 后只读核对：FolderBrowser、Export、Import、Rename、Tv、Movie、HomeTestButton 全部存在，首页按钮 DOM 存在。未启动/退出/重启官方客户端，未执行真实云盘写入或磁力/剪贴板设置变更。目录弹窗实际交互、移动/复制提交及云盘整理未验收，模拟检查不代替这些行为。
+- `node build-app.mjs` 成功生成 dist/光鸭云助手.app（arm64、Node v26.12.1、最低 macOS 13.5、本机 ad-hoc 签名）；随后验证双方 bundle id，通过 ditto 更新 `/Applications/光鸭云助手.app`，安装后 `codesign --verify --deep --strict` 和修复文件字节一致性检查通过。旧助手备份在 `/private/tmp/guangya-assistant-backup-9y2q6fi2/光鸭云助手.app`；临时备份不保证长期保留。未修改 `/Applications/光鸭云盘.app`、Git 索引/历史/远端。
+
+## 光鸭 1.1.1 更新后目录弹窗注入中断：仅诊断（2026-10-28）
+
+- 安装包 Info.plist/package.json 均为 1.1.1。助手启动日志 09:40:43 显示 bootstrap、Inspector、剪贴板限制及菜单安装成功，页面执行失败；官方应用日志 09:40:46 和 09:42:17 明确记录“当前应用目录弹窗不兼容，请核对光鸭版本”。工作区与已安装助手的 guangya-folder-browser.js SHA-256 一致，排除该文件的部署不同步。
+- 校验现有 127.0.0.1:9237 Inspector 的 process.execPath 后，在主窗口做只读接口探测：旧目录弹窗模块 11814 不存在，新模块 33446 导出 W，源码仍含 cancel folder select、NiceModal 与原生树调用。guangya-folder-browser.js 第 7/12 行写死旧编号，第 8 行立即抛错；启动器将全部 renderer 脚本串为一个表达式，后续编辑器、导出、导入、整理、重命名及首页入口因此未执行。实机确认列表拦截、排序、Message、Modal、NativeUI 已安装，FolderBrowser 和后续业务模块/首页按钮未安装。
+- 主窗口实际模块仍有 hooks.gW、nativeUI.hr、NiceModal.Ay/hS、HTTP 34118.E 等接口。静态扫描不同页面时，同编号模块可能导出不同集合；最初据其他窗口模块推断“树接口变化”不成立，已用主窗口实际 require 导出更正。当前确认断点是目录弹窗编号失效，其余组件及业务运行兼容性尚未验证。建议后续优先复用现有模块源码特征查找方式定位唯一目录弹窗，避免再次硬编码新编号，并验证移动/复制及快捷目录入口。
+- REA 只读 fuse 检查确认 EnableNodeCliInspectArguments 开启（Evidence ev_2f7ec0915d2949f1d374b7bce2e13925d4949d656e089e18a13c67aacd4c30c6）；本次未启动/重启应用、未重新注入业务脚本、未改生产源码/安装包、未读取登录 token、未操作云盘或 Git 索引/历史。仅更新本记录；尚未修复、构建或验收。
+
 ## 同名异路径仍移动，复用剧集批次确认列表（2026-10-26）
 
 - 用户明确修正：文件名相同但路径不同时仍需移动。撤销下方“仅同名即跳过”的规则，恢复解析目标目录 ID 后比较 parentId + 完整文件名；两者都一致才计为跳过并记录已到位，源目录清理恢复原有整批到位门槛。电影不变。

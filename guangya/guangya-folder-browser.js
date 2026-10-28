@@ -4,13 +4,17 @@
   window[key]?.destroy();
   let require;
   window.webpackChunk_swangpan_pc?.push([['guangya-folder-browser-' + Date.now()], {}, value => { require = value; }]);
-  const factory = require?.m?.[11814];
-  if (!factory || !String(factory).includes('cancel folder select')) throw Error('当前应用目录弹窗不兼容，请核对光鸭版本');
+  const candidates = Object.entries(require?.m ?? {}).filter(([, factory]) => {
+    const source = String(factory);
+    return ['cancel folder select', 'onCreateFolder', 'loadRootData'].every(marker => source.includes(marker));
+  });
+  if (candidates.length !== 1) throw Error('当前应用目录弹窗不兼容，请核对光鸭版本');
+  const [folderId, factory] = candidates[0];
   const { React, Input, Breadcrumb, ConfigProvider, getThemeProviders } = window.__guangyaNativeUI.getFolderBrowserRuntime();
   const { createElement: h, useState, useRef, useEffect, useCallback, useMemo } = React;
   const nativeUI = require(23219), hooks = require(5036), jsx = require(25270);
-  const { Ay: NiceModal, hS: useModal } = require(92061), originalFolder = require(11814).W;
-  if (typeof hooks.gW !== 'function' || typeof NiceModal.show !== 'function' || !nativeUI.hr || !Breadcrumb) throw Error('无法定位原生目录组件');
+  const { Ay: NiceModal, hS: useModal } = require(92061), originalFolder = require(folderId).W;
+  if (!originalFolder || typeof hooks.gW !== 'function' || typeof NiceModal.show !== 'function' || !nativeUI.hr || !Breadcrumb) throw Error('无法定位原生目录组件');
   const originalShow = NiceModal.show;
   let active = 0, treeState;
 
