@@ -97,7 +97,7 @@
     if (destroyed || shortcutOpening) return;
     shortcutOpening = true; schedule();
     try {
-      const response = await window.api.file.locateCloudFileInMain(id, { includeSelf: true });
+      const response = await window.api.file.locateCloudFileInMain(id, { intent: 'open-folder' });
       if (!response?.ok) throw Error(response?.msg || '打开快捷目录失败');
     } catch (error) { if (!destroyed) window.__guangyaMessage.error(error.message || '打开快捷目录失败'); }
     finally { shortcutOpening = false; if (!destroyed) schedule(); }

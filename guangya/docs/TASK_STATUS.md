@@ -1,5 +1,26 @@
 # 光鸭云盘注入脚本：任务进度与接续说明
 
+## 原版移动/复制请求链复核：仅分析（2026-10-29）
+
+- 用户指出原版打开弹窗只有 get_file_detail、get_file_list。重新追踪当前 1.1.1 原始工厂：main 的 move/copy 调用 43228.U({scene,isSafebox})，18063.u 经原生 IPC 读取该账号 normal/safebox 对应场景的最近位置；43228 的 c 通过 4179.DK（2854.DK）POST get_file_detail({fileId:lastId}) 校验目录并取 location，返回 folder/rootFolder/lastFolder，再将 initValue/initPath/defaultValue/defaultPath/rootValue/rootPath 传给原版 33446.W。
+- 原版 33446 使用 gW({autoLoad:false,root:{id:rootValue,title:rootPath}})，显示时调用 loadRootData；底层 3723.Q 通过 get_file_list 查询 rootValue（普通云盘为空字符串，保险箱为其根 ID），page=0/pageSize=100/resType=DIRECTORY/needSubFolderStat=true，按 total 分页。树节点展开时才按需查子目录；显示上次路径、保留上次选中 ID 不代表其全部祖先及子目录已加载。“恢复上次”本身只设置 selectedKey。故有有效的非根最近目录、根列表单页且无额外操作时，用户观察的两次云盘请求与源码一致；无历史/根目录无需详情，分页/展开/异常分支不能保证总数两次。真正确认后才做目标检查、move_file/copy_file、任务状态查询及列表刷新。
+- 通过当前原生 4179.DK 对已配置“更新中”目录仅做一次详情读取，实际 data 包含 fileInfo/location/sizeInfo；fileInfo 已含 fileId/parentId/fullParentIds/resType，location 为“影音/更新中”。无需再次 get_info_by_file_id 获取同一份祖先信息。上一轮助手为了逐层列表恢复又新增详情查询及祖先/目标列表请求，确实比原版更多；此前只验证弹窗恢复成功，没有核对原版请求数。后续若优化，应让已有详情传入自定义浏览器并直接加载目标层，避免重复详情和逐层枚举所有祖先；本轮未实施。
+- REA 针对 package.json、723 与 314 chunks 的限定静态分析 parent Evidence：ev_71b451db94f5a2a0fbe99b36f7b49ed827a0e6d26f5d8bdfb52159024ec8bac0，app.asar SHA-256 1e96703def8e8ee336f8e67613c4cdcce81332204bc8a7323bbe1d4abbd2704c；覆盖为部分，未选择模块的调用链另以原文及现有主窗口未改动工厂核对。5 个原生文件完整性声明不一致已 record-and-continue，本结论仅依赖相关 JavaScript，不依赖这些原生文件。未操作界面、未提交云盘写入、未改功能源码/构建/安装包/Git 索引历史；仅补充此分析记录。
+
+## 移动/复制恢复深层上次目录（2026-10-29）
+
+- 用户截图显示“当前位置：文件/影音/更新中”但列表提示目录不存在。核对实际原生目录工厂、gW 与底层懒加载：原生弹窗保留 initValue/defaultValue，初次只加载根目录；助手替换树后仅从已加载 treeData 查找 selectedKey，没有补齐深层祖先，导致恢复路径文字但找不到节点。修复共用 FolderBrowser：必要时通过原生 HTTP 读取目录 fullParentIds，再复用现有 onLoadData 逐层补齐祖先和目标子目录；已知目标也自动加载自身内容。目录详情按实机响应直接读取 data，允许成功响应不含 code；校验目录 ID/类型和根目录范围，关闭/切换取消详情并忽略迟到结果。
+- 加载失败可重试，目标缺失或无法访问可返回根目录；移动/复制的目标未加载、加载中或导航中时禁用确定/新建文件夹，取消保持可用。未改真实移动、复制、改名或创建目录请求。
+- 新增 `node scripts/check-folder-restore.mjs`，旧源码在“上次深层目录必须加载祖先及自身内容”断言失败；修复版覆盖深层逐层恢复及内容、已知目录、详情/列表失败重试、返回根目录、关闭迟到清理与原生 JSX 按钮保护。现有快捷目录及模块定位回归、源码语法、差异空白检查通过。
+- `--attach` 成功注入。校验 Inspector execPath 后，复用用户配置的“更新中”目录做串行独立原生选择器诊断：移动到、复制到均显示完整“文件/影音/更新中”路径和 10 个子目录，确定按钮可用，无原报错；均已取消关闭，未挂接真实移动/复制提交回调，未修改云盘。首次诊断遇到用户已有目录弹窗时按保护退出；另一次独立诊断被取消，未计为通过，最终自动读取后关闭的两场景才作为验证证据。未执行真实移动/复制、新建、改名或删除。
+- 构建成功并更新 `/Applications/光鸭云助手.app`，安装后签名与修复脚本字节一致性通过；旧助手临时备份在 `/private/tmp/guangya-folder-backup-zuhuhvky/光鸭云助手.app`。未修改官方光鸭安装包、系统设置、剪贴板、Git 索引/历史。真实云盘提交仍由用户验收；账号切换及保险箱恢复未实机覆盖。
+
+## 快捷目录点击改为进入目录，适配 1.1.1 导航参数（2026-10-29）
+
+- 用户反馈快捷目录点击后只选中目录。追踪 guangya-home-button.js 的 openDirectory 与安装包主进程 resolveCloudFileLocation：1.1.1 仅在 locationOptions.intent 为 open-folder 时将目录自身加入目标路径并省略 locateFileId；旧 includeSelf 参数不参与判断，默认进入父目录并定位选中。将唯一调用的选项改为 `{ intent: 'open-folder' }`，保留原生 IPC、并发保护和错误处理。
+- 扩展 `node scripts/check-shortcut-settings.mjs`，旧版先在导航参数断言失败；修复后覆盖进入目录语义、重复点击合并、接口失败/异常提示、销毁后不导航，原有快捷目录选择与存储回归继续通过。另从当前安装包原文提取实际路由构造函数，隔离执行根目录及嵌套目录案例：新参数均进入自身且无 locateFileId，旧参数均带定位 ID；通过。源码语法及差异空白检查通过。
+- `node open-guangya-devtools.mjs --attach` 成功，返回 installed=true/homeActive=true，当前进程已加载修复。`node build-app.mjs` 成功；核对 bundle id 并备份旧助手后更新 `/Applications/光鸭云助手.app`，安装后签名和脚本字节一致性检查通过。旧版临时备份：`/private/tmp/guangya-shortcut-backup-yw923kod/光鸭云助手.app`。未修改官方安装包、Git 索引/历史、剪贴板或系统设置；未操作真实云盘写入，未自动点击实际快捷目录，真实界面导航仍待用户验收。
+
 ## 光鸭 1.1.1 目录弹窗模块定位修复（2026-10-28）
 
 - 用户授权修复后，guangya-folder-browser.js 改为在当前主窗口 Webpack 工厂中按 cancel folder select、onCreateFolder、loadRootData 三个特征定位唯一目录弹窗。零匹配、多匹配仍报版本不兼容；原生组件引用与替换工厂共用查到的模块 ID，移除两处 11814 硬编码，并检查原生 W 导出。移动/复制、快捷目录、请求和云盘写入规则不变。

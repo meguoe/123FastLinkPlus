@@ -148,3 +148,30 @@ pickerWindow.__guangyaFolderBrowser.destroy();
 assert.equal(NiceModal.show, originalShow, '销毁后恢复原生弹窗');
 assert.equal(pickerWindow.__guangyaFolderBrowser, undefined);
 console.log('ok 新编号移动/复制替换、其他弹窗隔离、销毁恢复');
+
+// Shortcut activation must open the directory, not locate/select it in its parent.
+const openBlock = source.slice(source.indexOf('  async function openDirectory'), source.indexOf('  function updateShortcuts'));
+const makeOpener = vm.runInNewContext(`request => {
+  let destroyed = false, shortcutOpening = false;
+  const errors = [], schedule = () => {};
+  const window = { api: { file: { locateCloudFileInMain: request } },
+    __guangyaMessage: { error: message => errors.push(message) } };
+  ${openBlock}
+  return { openDirectory, errors, destroy() { destroyed = true; } };
+}`);
+let finishOpen, calls = [];
+const opener = makeOpener((...args) => { calls.push(plain(args)); return new Promise(resolve => { finishOpen = resolve; }); });
+const openingDirectory = opener.openDirectory('123');
+await opener.openDirectory('456');
+assert.deepEqual(calls, [['123', { intent: 'open-folder' }]], '必须使用进入目录语义，且合并重复点击');
+finishOpen({ ok: true }); await openingDirectory;
+assert.equal(opener.errors.length, 0);
+const retryOpen = opener.openDirectory('456');
+finishOpen({ ok: false, msg: '目录不存在' }); await retryOpen;
+assert.deepEqual(plain(opener.errors), ['目录不存在']);
+opener.destroy(); await opener.openDirectory('789');
+assert.equal(calls.length, 2, '销毁后不能导航');
+const rejectedOpen = makeOpener(async () => { throw Error('网络失败'); });
+await rejectedOpen.openDirectory('123');
+assert.deepEqual(plain(rejectedOpen.errors), ['网络失败']);
+console.log('ok 快捷目录进入语义、重复点击、失败提示、销毁保护');

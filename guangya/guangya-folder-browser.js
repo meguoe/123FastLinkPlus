@@ -53,6 +53,7 @@
 
   function FolderBrowser({ treeData, selectedKey, onSelect, state, selection, onToggle }) {
     const [query, setQuery] = useState('');
+    const [restore, setRestore] = useState(null), [restoreAttempt, retryRestore] = useState(0);
     const retry = useRef(null), navigating = useRef(false), alive = useRef(true);
     useEffect(() => { active++; alive.current = true; return () => { active--; alive.current = false; }; }, []);
     useEffect(() => { setQuery(''); retry.current = null; state.clearError(); }, [selectedKey, state.clearError]);
@@ -60,6 +61,34 @@
     function collect(items) { for (const node of items) { nodes.set(String(node.key), node); collect(node.children || []); } }
     collect(treeData);
     const current = nodes.get(String(selectedKey)), ready = state.loaded.has(state.rootId);
+    // A remembered destination may be below the nodes loaded so far.
+    useEffect(() => {
+      if (!ready || current) return;
+      let cancelled = false;
+      const controller = new AbortController(), key = String(selectedKey);
+      setRestore({ key, pending: true });
+      require(34118).E('/userres/v1/file/get_info_by_file_id', {
+        method: 'POST', body: { fileId: key }, signal: controller.signal, extra: { skipSafeboxUnlock: true },
+      }).then(response => {
+        const file = response?.data;
+        if (response?.code !== undefined && response.code !== 0 || String(file?.fileId) !== key || Number(file?.resType) !== 2) throw Error(response?.msg || '目标目录不存在或无法访问');
+        const parents = String(file.fullParentIds || '').split('/').filter(Boolean);
+        if (state.rootId && !parents.includes(state.rootId)) throw Error('目标目录不在当前根目录内');
+        const path = [state.rootId, ...parents, key];
+        const root = path.lastIndexOf(state.rootId);
+        if (!cancelled) setRestore({ key, path: path.slice(root) });
+      }).catch(error => { if (!cancelled) setRestore({ key, error: error.message || '读取目标目录失败' }); });
+      return () => { cancelled = true; controller.abort(); };
+    }, [selectedKey, ready, !!current, restoreAttempt]);
+    useEffect(() => {
+      if (!ready) return;
+      const node = current || (restore?.key === String(selectedKey) ? restore.path?.map(id => nodes.get(id)).find(node => node && !state.loaded.has(String(node.key))) : null);
+      if (!node || current && node.isLeaf || state.loaded.has(String(node.key))) return;
+      retry.current = () => state.onLoadData(node);
+      state.onLoadData(node);
+    }, [current, ready, restore, state.onLoadData, state.loaded]);
+    const restoring = !current && (!restore || restore.key !== String(selectedKey) || restore.pending ||
+      restore.path?.some(id => nodes.has(id) && !state.loaded.has(id))) && !restore?.error && !state.error;
     const path = current?.pathIds || [state.rootId];
     const needle = query.trim().toLocaleLowerCase();
     const children = (current?.children || []).filter(node => {
@@ -79,7 +108,7 @@
         if (alive.current) state.setNavigationBusy(false);
       }
     }
-    const disabled = state.navigationBusy || state.loading;
+    const disabled = state.navigationBusy || state.loading || restoring;
     const items = path.map((id, index) => {
       const node = nodes.get(String(id));
       const title = node?.title ?? state.nodesMap[id]?.title ?? '';
@@ -90,7 +119,10 @@
     let content;
     if (disabled || !ready && !state.error) content = h('div', { role: 'status', className: 'guangya-folder-empty' }, '加载中...');
     else if (!ready) content = null;
-    else if (!current) content = h('div', { role: 'alert' }, '当前目录不存在，请关闭后重试');
+    else if (!current) content = h('div', { role: 'alert' },
+      restore?.error || '当前目录不存在或无法访问',
+      restore?.error ? h('button', { type: 'button', onClick: () => retryRestore(value => value + 1) }, '重试') : null,
+      h('button', { type: 'button', onClick: () => { state.clearError(); onSelect(state.rootId); } }, '返回根目录'));
     else if (!children.length) content = h('div', { role: 'status', className: 'guangya-folder-empty' }, needle ? '无匹配目录' : '空目录');
     else content = children.map(node => {
       const row = h('button', {
@@ -148,8 +180,15 @@
   function localRequire(id) {
     if (id === 5036) return { ...hooks, gW: useTree };
     if (id === 25270) return { ...jsx, jsx(type, props, ...args) {
-      if (type === nativeUI.hr) return jsx.jsx(FolderBrowser, { ...props, state: treeState }, ...args);
-      if (type === nativeUI.$n && ['确定', '新建文件夹'].includes(props.children)) props = { ...props, disabled: props.disabled || treeState.navigationBusy };
+      if (type === nativeUI.hr) {
+        treeState.currentKey = String(props.selectedKey);
+        return jsx.jsx(FolderBrowser, { ...props, state: treeState }, ...args);
+      }
+      if (type === nativeUI.$n && ['确定', '新建文件夹'].includes(props.children)) {
+        const current = treeState.nodesMap[treeState.currentKey];
+        props = { ...props, disabled: props.disabled || treeState.navigationBusy || treeState.loading || !current ||
+          !current.isLeaf && !treeState.loaded.has(String(current.key)) };
+      }
       return jsx.jsx(type, props, ...args);
     } };
     return require(id);
