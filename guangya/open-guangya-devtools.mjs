@@ -42,7 +42,7 @@ function buildSegmentedSource() {
   const { createRequire } = process.mainModule.require('module');
   const path = process.mainModule.require('path');
   const resolve = createRequire(path.join(app.getAppPath(), 'package.json')).resolve;
-  const external = new Set(['react', 'react-dom']);
+  const external = new Set(['react', 'react-dom', 'react-dom/client']);
   const modules = [], ids = new Map();
   function collect(file) {
     if (ids.has(file)) return ids.get(file);
@@ -71,7 +71,7 @@ function buildSegmentedSource() {
   const provider = collect(resolve('antd/lib/config-provider'));
   return `window.__guangyaLoadSegmented = runtime => {
     const modules = [${modules.join(',')}], cache = {};
-    const external = {react:runtime.React,'react-dom':runtime.dom};
+    const external = {react:runtime.React,'react-dom':runtime.dom,'react-dom/client':runtime.client};
     function load(id) {
       if (typeof id === 'string') return external[id];
       if (cache[id]) return cache[id].exports;

@@ -78,76 +78,111 @@ pending.destroy(); resolveSelection([dirs[2]]); await picking;
 assert.equal(writes, writesBeforeDestroy);
 console.log('ok 重复点击合并、销毁后不保存');
 
-// Exercise the actual picker's selection callbacks with lightweight hook/element seams.
+// Exercise the actual picker with the native paginated hook at its boundary.
 const pickerSource = readFileSync(new URL('../guangya-folder-browser.js', import.meta.url), 'utf8');
-let hookStates = [], hookIndex = 0, component, props;
-const buckets = new Map();
+let slots = [], cursor = 0, component, props, options, refreshes = 0, more = 0;
+const effects = [];
 const React = {
   createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
   useState(initial) {
-    const states = hookStates, index = hookIndex++;
-    if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
-    return [states[index], next => { states[index] = typeof next === 'function' ? next(states[index]) : next; }];
+    const index = cursor++;
+    if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
+    return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
   },
-  useRef: current => ({ current }), useEffect() {}, useCallback: callback => callback, useMemo: create => create(),
+  useEffect(callback, deps) {
+    const index = cursor++, old = slots[index];
+    if (!old || deps.some((value, i) => value !== old.deps[i])) {
+      old?.cleanup?.(); const item = slots[index] = { deps };
+      effects.push(() => { item.cleanup = callback(); });
+    }
+  },
 };
-const nodes = Array.from({ length: 6 }, (_, index) => ({ key: String(200 + index), title: `目录${index}`, pathIds: ['', String(200 + index)], children: [], isLeaf: true }));
-const root = { key: '', title: '全部文件', pathIds: [''], children: nodes };
-const nodesMap = Object.fromEntries([root, ...nodes].map(node => [node.key, node]));
-let resolved;
-const modal = { visible: true, resolve: value => { resolved = value; }, hide() {}, remove() {}, reject() {} };
+const folders = Array.from({ length: 6 }, (_, i) => ({ fileId: String(200 + i), fileName: `目录${i}`, resType: 2 }));
+let frame = { id: '', hydrated: true, isLoading: false, hasMore: true };
+let items = [...folders, { fileId: 'safe', fileName: '保险箱', dirType: 20, resType: 2 }];
+let resolved, cancelled = false, request;
+const modal = { visible: true, resolve: value => { resolved = value; }, hide() {}, remove() {}, reject: value => { cancelled = value; } };
 const NiceModal = { create: value => value, show: (next, initial) => { component = next; props = initial; } };
 const originalShow = NiceModal.show;
-const modules = { 23219: { aF: 'modal', $n: 'button', hr: 'tree' }, 92061: { Ay: NiceModal, hS: () => modal },
-  5036: { gW: () => ({ treeData: [root], nodesMap, loading: false, saveEditing: async () => ({ ok: true }) }) },
-  25270: { jsx() {} }, 33446: { W: 'original' }, 65487: { oDp: { SAFEBOX: 20 } } };
+const store = {};
+const modules = {
+  23219: { aF: 'modal', $n: 'button' }, 92061: { Ay: NiceModal, hS: () => modal },
+  5036: { FU: value => { options = value; return { activeFrame: frame, items, isLoading: frame?.isLoading,
+    refreshActive: () => { refreshes++; }, loadMoreActive: () => { more++; } }; } },
+  30287: { Ay: () => store }, 4179: { Wr: (...args) => { request = args; } },
+  65487: { oDp: { SAFEBOX: 20 } },
+};
 const requireModule = id => modules[id];
-requireModule.m = { 33446(module) { /* cancel folder select; onCreateFolder; loadRootData */ module.exports.W = 'replacement'; } };
+requireModule.m = {};
 const pickerWindow = { __guangyaNativeUI: { getFolderBrowserRuntime: () => ({ React, Input: 'input', Breadcrumb: 'breadcrumb', ConfigProvider: 'provider', getThemeProviders: () => [] }) },
   webpackChunk_swangpan_pc: { push: chunk => chunk[2](requireModule) } };
-vm.runInNewContext(pickerSource, { window: pickerWindow, document: { createElement: () => ({ remove() {} }), head: { append() {} } } });
-for (const title of ['移动到', '复制到']) {
-  NiceModal.show('original', { title });
-  assert.equal(component, 'replacement', `${title}须替换当前版本的目录弹窗`);
-}
-NiceModal.show('original', { title: '保存到' });
-assert.equal(component, 'original', '其他目录弹窗保持原样');
-NiceModal.show('other', { title: '移动到' });
-assert.equal(component, 'other', '其他组件保持原样');
+const document = { createElement: () => ({ remove() {} }), head: { append() {} } };
+assert.doesNotThrow(() => vm.runInNewContext(pickerSource, { window: pickerWindow, document }), '1.1.2 has no legacy tree or folder factory');
+assert.equal(NiceModal.show, originalShow, '移动/复制及其他原生弹窗均不得拦截');
 pickerWindow.__guangyaFolderBrowser.select([]);
-function render(type = component, values = props) {
-  if (!buckets.has(type)) buckets.set(type, []);
-  hookStates = buckets.get(type); hookIndex = 0;
-  return type(values);
+function render() {
+  cursor = 0; const result = component(props);
+  for (const effect of effects.splice(0)) effect();
+  return result;
 }
-function find(node, predicate) {
-  if (!node || typeof node !== 'object') return;
-  if (predicate(node)) return node;
-  for (const child of (node.children || []).flat(Infinity)) { const match = find(child, predicate); if (match) return match; }
+function all(node, predicate) {
+  if (!node || typeof node !== 'object') return [];
+  return [...(predicate(node) ? [node] : []), ...(node.children || []).flat(Infinity).flatMap(child => all(child, predicate))];
 }
-const browser = () => find(render(), node => node.type?.name === 'FolderBrowser');
-for (const node of nodes) browser().props.onToggle(node);
-assert.equal(browser().props.selection.length, 5, '第六次勾选必须拒绝');
-const folder = browser();
-folder.props.state.loaded.add('');
-const sixth = find(render(folder.type, folder.props), node => node.props['data-folder-check'] === '205');
-assert.equal(sixth.props.disabled, true);
-browser().props.onToggle(nodes[1]);
-browser().props.onToggle(nodes[5]);
-assert.deepEqual(plain(browser().props.selection).map(item => item.id), ['200', '202', '203', '204', '205']);
-const picker = render();
-const confirm = find(picker, node => node.type === 'button' && node.children.includes('确定'));
-confirm.props.onClick();
-assert.equal(resolved.length, 5);
+const find = (node, predicate) => all(node, predicate)[0];
+const button = text => find(render(), node => node.type === 'button' && node.children.includes(text));
+const checks = () => all(render(), node => node.props['data-folder-check']);
+render();
+assert.equal(options.store, store);
+assert.equal(options.mode, 'page');
+assert.equal(options.rootFrameId, '');
+assert.equal(options.params.resType, 2);
+const signal = new AbortController().signal;
+options.fetcher({ parentId: '123' }, signal);
+assert.equal(request[1].signal, signal, '请求取消交给原生 Hook');
+assert.equal(checks().length, 6, '保险箱不能勾选');
+for (let i = 0; i < 6; i++) checks()[i].props.onChange();
+assert.equal(checks()[5].props.disabled, true, '第六项禁用');
+button('确定').props.onClick();
+assert.deepEqual(plain(resolved).map(item => item.id), ['200', '201', '202', '203', '204']);
 assert.equal(resolved[0].path, '全部文件/目录0');
-const clear = find(render(), node => node.type === 'button' && node.children.includes('清空'));
-clear.props.onClick();
-assert.equal(browser().props.selection.length, 0);
-console.log('ok 实际选择器第六项拒绝、禁用复选框、移除后追加、确认和清空');
+checks()[1].props.onChange(); checks()[5].props.onChange();
+button('确定').props.onClick();
+assert.deepEqual(plain(resolved).map(item => item.id), ['200', '202', '203', '204', '205']);
+button('清空').props.onClick();
+button('确定').props.onClick(); assert.deepEqual(plain(resolved), []);
+console.log('ok 原生弹窗未拦截、原生分页/取消接口、多选上限/顺序/清空');
+
+const input = () => find(render(), node => node.type === 'input' && node.props.placeholder);
+input().props.onChange({ target: { value: '目录1' } });
+assert.equal(checks().length, 1);
+assert.match(JSON.stringify(render()), /已加载/);
+button('加载更多').props.onClick(); assert.equal(more, 1);
+input().props.onChange({ target: { value: '' } });
+find(render(), node => node.props['data-folder-id'] === '200').props.onClick();
+render(); assert.deepEqual(plain(options.folderPath), [{ id: '200', name: '目录0' }]);
+assert.equal(button('确定').props.disabled, true, '换层时旧 frame 不得提交');
+assert.equal(checks().length, 0, '换层时不显示旧列表');
+frame = { id: '200', hydrated: false, isLoading: false, error: '加载失败' };
+assert.equal(button('确定').props.disabled, true);
+button('重试').props.onClick(); assert.equal(refreshes, 1);
+button('取消').props.onClick(); assert.equal(cancelled, 'cancel folder select');
+frame = { id: '200', hydrated: true, isLoading: false, hasMore: false };
+items = [{ fileId: 'nested', fileName: '子目录', resType: 2 }];
+assert.equal(button('确定').props.disabled, false);
+checks()[0].props.onChange(); button('确定').props.onClick();
+assert.equal(resolved[0].path, '全部文件/目录0/子目录');
+const breadcrumb = find(render(), node => node.type === 'breadcrumb');
+breadcrumb.props.items[0].onClick(); render();
+assert.deepEqual(plain(options.folderPath), []);
+modal.visible = false; render(); assert.equal(options.enabled, false);
+modal.visible = true; render();
+assert.throws(() => pickerWindow.__guangyaFolderBrowser.destroy(), /目录弹窗正在使用/);
+for (const slot of slots) slot?.cleanup?.();
 pickerWindow.__guangyaFolderBrowser.destroy();
-assert.equal(NiceModal.show, originalShow, '销毁后恢复原生弹窗');
+assert.equal(NiceModal.show, originalShow);
 assert.equal(pickerWindow.__guangyaFolderBrowser, undefined);
-console.log('ok 新编号移动/复制替换、其他弹窗隔离、销毁恢复');
+console.log('ok 当前层筛选/分页提示、逐层路径/返回根、失败重试/取消、旧列表隔离、关闭/销毁');
 
 // Shortcut activation must open the directory, not locate/select it in its parent.
 const openBlock = source.slice(source.indexOf('  async function openDirectory'), source.indexOf('  function updateShortcuts'));

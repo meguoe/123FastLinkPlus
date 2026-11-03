@@ -1,24 +1,27 @@
-// Exercise the actual module lookup without Electron, React, or cloud requests.
+// Verify the real shortcut adapter fails closed when native interfaces change.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-
 const source = readFileSync(new URL('../guangya-folder-browser.js', import.meta.url), 'utf8');
-const lookup = source.slice(source.indexOf('  let require;'), source.indexOf('  const { React,'));
-function locate(modules) {
-  const require = () => { throw Error('lookup must not execute factories'); };
-  require.m = modules;
-  return vm.runInNewContext(`(() => { ${lookup}\nreturn factory; })()`, {
-    window: { webpackChunk_swangpan_pc: { push: chunk => chunk[2](require) } },
-  });
+function check(missing) {
+  const show = () => {};
+  const modules = {
+    23219: { aF: {}, $n: {} }, 5036: { FU() {} }, 30287: { Ay() {} }, 4179: { Wr() {} },
+    92061: { Ay: { create: value => value, show }, hS() {} }, 65487: { oDp: { SAFEBOX: 20 } },
+  };
+  if (missing) delete modules[missing[0]][missing[1]];
+  const require = id => modules[id];
+  const window = {
+    webpackChunk_swangpan_pc: { push: chunk => chunk[2](require) },
+    __guangyaNativeUI: { getFolderBrowserRuntime: () => ({ React: {}, getThemeProviders() {} }) },
+  };
+  vm.runInNewContext(source, { window, document: { createElement: () => ({ remove() {} }), head: { append() {} } } });
+  assert.equal(modules[92061].Ay.show, show, '原生弹窗入口不得修改');
+  window.__guangyaFolderBrowser.destroy();
+  assert.equal(window.__guangyaFolderBrowser, undefined);
 }
-function folder() { /* cancel folder select; onCreateFolder; loadRootData */ }
-function unrelated() { /* cancel folder select */ }
-for (const id of [11814, 33446, 98765]) {
-  assert.equal(locate({ [id]: folder, 123: unrelated }), folder);
+check();
+for (const missing of [[5036, 'FU'], [30287, 'Ay'], [4179, 'Wr'], [92061, 'hS'], [23219, 'aF'], [65487, 'oDp']]) {
+  assert.throws(() => check(missing), /快捷目录接口不兼容/);
 }
-assert.throws(() => locate({ 11814: unrelated }), /目录弹窗不兼容/);
-assert.throws(() => locate({ 33446: folder, 98765: folder }), /目录弹窗不兼容/);
-assert.throws(() => locate(undefined), /目录弹窗不兼容/);
-assert(!source.includes('require(11814)'), 'original and replacement must use the discovered module');
-console.log('目录模块旧/新/未知编号、无匹配、多匹配、未加载及统一引用检查通过');
+console.log('快捷目录原生接口验证、缺失保护、原生弹窗不变及销毁检查通过');

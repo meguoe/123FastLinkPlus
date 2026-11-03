@@ -20,7 +20,7 @@
 | `guangya-app-menu.mjs` / `guangya-magnet.mjs` | 手动 DevTools 菜单、系统磁力直达原生云添加弹窗 |
 | `guangya-clipboard.mjs` | 原生剪贴板云添加仅匹配显式磁力，首次安装后开启原生开关 |
 | `guangya-file-list.js` / `guangya-file-sort.js` | 指定 XHR pageSize=500、排序缓存和重挂载恢复 |
-| `guangya-folder-browser.js` | 移动/复制弹窗逐层目录、Breadcrumb 和当前层本地过滤 |
+| `guangya-folder-browser.js` | 快捷目录多选、原生分页目录接口、Breadcrumb 和已加载当前层过滤；移动/复制沿用原生弹窗 |
 | `guangya-export.js` / `guangya-import.js` | 共享选择读取、秒传导出/导入 |
 | `guangya-rename.js` / `guangya-tv.js` | 三种重命名规则、电影/剧集扫描匹配及整理 |
 | `guangya-tmdb-bridge.mjs` | 受限 TMDB 请求、超时、取消和窗口清理 |

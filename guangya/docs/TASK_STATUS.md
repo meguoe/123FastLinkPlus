@@ -1,5 +1,20 @@
 # 光鸭云盘注入脚本：任务进度与接续说明
 
+## 光鸭 1.1.2 适配完成：原生移动/复制、助手快捷目录（2026-11-03）
+
+- 用户选择“移动/复制沿用新版原生弹窗，仅适配助手快捷目录”。删除旧目录弹窗工厂定位、gW/hr 树替换及 NiceModal.show 拦截；移动/复制完整沿用官方 1.1.2 弹窗和请求流程。快捷目录使用原生 5036.FU 分页 Hook、30287.Ay 独立 frame store、4179.Wr 目录列表请求，透传 AbortSignal，由原生负责请求取消、缓存及迟到结果隔离；无额外目录详情查询。
+- 快捷目录保留五项多选、勾选顺序、跨层选择、Breadcrumb、当前层筛选、清空、取消、加载失败重试及活动弹窗重注入保护。分页未取全时显示“仅筛选已加载目录，还有更多目录未加载”和“加载更多”；换层时不展示旧 frame 列表、加载或失败时禁用确定。已有配置和进入目录语义不变。
+- 先将快捷目录回归改成无旧树/旧弹窗的 1.1.2 边界，旧源码复现“目录弹窗不兼容”；修复后通过。更新 check-folder-module.mjs 验证新版原生接口缺失保护及不修改原生 show；原 check-folder-restore.mjs 专门覆盖已删除的移动/复制树恢复与 JSX 拦截，移除该过时脚本，新快捷目录导航/失败/关闭检查并入 check-shortcut-settings.mjs。全部 JS/MJS（含 scripts）语法、scripts/check-*.mjs、磁力/剪贴板 self-test、git diff --check 通过。
+- `node open-guangya-devtools.mjs --attach` 完整成功（installed=true/homeActive=true）。串行实机独立打开快捷目录，根层 4 项、勾选 1 项后进入“影音”子层 5 项且保留勾选，无错误；取消，未保存用户配置。分别独立打开原生“移动到”“复制到”，均显示新版原生界面，无助手目录标记或错误，均取消，未接入真实移动/复制提交回调。截图 `/private/tmp/guangya-shortcut-1.1.2.png` 已查看。真实多页目录、断网取消竞态、账号切换未实机覆盖；五项上限/筛选/重试由离线检查覆盖。
+- `node build-app.mjs` 成功，dist/光鸭云助手.app 为 arm64、Node v26.12.1、最低 macOS 13.5、本机 ad-hoc 签名。自动审批拒绝覆盖 `/Applications/光鸭云助手.app`：认为用户未明确授权覆盖已安装应用且临时备份不能消除恢复风险；初次安装命令未执行。用户随后明确批准“备份并覆盖安装”，已完成更新；旧助手备份在 `dist/backups/20261103-tp3s8m0f/光鸭云助手.app`，备份及安装后签名、安装后全部脚本字节一致性通过。通过已安装助手内置 Node 与脚本执行 `--attach` 再次成功，返回 installed=true/homeActive=true。未修改官方安装包、云盘数据、剪贴板、系统设置、Git 索引或历史，未退出/重启客户端。
+
+## 光鸭 1.1.2 缺失 react-dom/client：打包修复，目录兼容待适配（2026-11-03）
+
+- launcher.log 2026-11-03 09:18:57（上海时间）显示组件 collect 在 `@rc-component/util/lib/React/render.js` 解析 `react-dom/client` 失败。校验 127.0.0.1:9237 Inspector 的 process.execPath 后，只读确认当前官方版本 1.1.2，该依赖直接 require client；助手仅排除 react/react-dom，未排除 client。启动器补充 external 映射到已有 runtime.client，不安装依赖、不引入第二份 React。
+- 新增 `node scripts/check-component-bundle.mjs`：旧源码在禁止从安装包解析 react-dom/client 的断言失败；修复后旧/新依赖共用 renderer 原实例、全部组件与状态图标检查通过。全部 JS/MJS（含 scripts）语法、scripts/check-*.mjs、git diff --check、node build-app.mjs 通过；dist 产物为 arm64、Node v26.12.1、最低 macOS 13.5、本机 ad-hoc 签名。未覆盖 /Applications 中助手。
+- 实机 `--attach` 已越过原模块解析错误，但 renderer 报“当前应用目录弹窗不兼容，请核对光鸭版本”。只读核对主窗口：新版目录弹窗 41633.W 已改用分页目录列表与 Breadcrumb；5036 不再导出 gW，23219 不再导出 hr，所有工厂均无 loadRootData。现有助手的查找和旧树替换不能只换编号。NativeUI 原生运行时与所有补充组件可加载，主题 providers 数量为 2；完整业务注入仍失败，不能视为修复完成。后续需要确定保留助手目录交互还是复用新版原生弹窗，已向用户提出选择。
+- REA 限定分析 package.json 与 render.js，parent Evidence `ev_9a2565d87b48a22139beeb5d32fd65dc92e1fa9d6604c976ab28c42fcdaf2055`，app.asar SHA-256 `e802e71832dcab1a2e6a16dc4b9dbec1d71bb8e4e703aaa49baa9cb269223034`；覆盖部分，5 个原生文件完整性声明不一致沿用 record-and-continue，不依赖其行为。未修改官方安装包、云盘数据、系统设置、剪贴板、Git 索引或历史，未退出/重启客户端。
+
 ## 原版移动/复制请求链复核：仅分析（2026-10-29）
 
 - 用户指出原版打开弹窗只有 get_file_detail、get_file_list。重新追踪当前 1.1.1 原始工厂：main 的 move/copy 调用 43228.U({scene,isSafebox})，18063.u 经原生 IPC 读取该账号 normal/safebox 对应场景的最近位置；43228 的 c 通过 4179.DK（2854.DK）POST get_file_detail({fileId:lastId}) 校验目录并取 location，返回 folder/rootFolder/lastFolder，再将 initValue/initPath/defaultValue/defaultPath/rootValue/rootPath 传给原版 33446.W。
