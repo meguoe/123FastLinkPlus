@@ -5,7 +5,7 @@ import { access, readFile } from 'node:fs/promises';
 import { installTmdbBridge } from './guangya-tmdb-bridge.mjs';
 import { installAppMenu } from './guangya-app-menu.mjs';
 import { normalizeMagnetLinks, openMagnetLinks } from './guangya-magnet.mjs';
-import { restrictMagnetClipboard, locateMagnetClipboard, installMagnetClipboard } from './guangya-clipboard.mjs';
+import { extendShareClipboard, restrictMagnetClipboard, locateMagnetClipboard, installMagnetClipboard } from './guangya-clipboard.mjs';
 
 const magnetArgument = process.argv.indexOf('--magnet');
 const magnetLinks = magnetArgument < 0 ? [] : normalizeMagnetLinks(process.argv.slice(magnetArgument + 1));
@@ -316,11 +316,13 @@ try {
     if (!foreground) throw Error('未找到光鸭云盘主窗口或登录窗口，无法唤到前台');
   }
   const clipboard = await evaluate(`(() => {
+    const extendShareClipboard = ${extendShareClipboard.toString()};
     const restrictMagnetClipboard = ${restrictMagnetClipboard.toString()};
     const locateMagnetClipboard = ${locateMagnetClipboard.toString()};
     return (${installMagnetClipboard.toString()})();
   })()`, true);
   if (!clipboard?.clipboardMagnetOnly) throw Error('原生剪贴板磁力限制未安装');
+  if (!clipboard?.clipboardShareId) throw Error('原生剪贴板 shareId 识别未安装');
   console.log(JSON.stringify(clipboard));
   // A link click in an already running app only opens the resolver; do not reinject active dialogs.
   if (!magnetLinks.length || !attach) {

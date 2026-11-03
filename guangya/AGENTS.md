@@ -18,7 +18,7 @@
 | `open-guangya-devtools.mjs` | 启动、`--attach`、Inspector 校验、组件打包和自动注入 |
 | `build-app.mjs` / `macos-launcher.m` | 内置 Node 的 macOS app 构建、原生启动、URL 队列和错误日志 |
 | `guangya-app-menu.mjs` / `guangya-magnet.mjs` | 手动 DevTools 菜单、系统磁力直达原生云添加弹窗 |
-| `guangya-clipboard.mjs` | 原生剪贴板云添加仅匹配显式磁力，首次安装后开启原生开关 |
+| `guangya-clipboard.mjs` | 云添加仅匹配显式磁力；分享匹配支持单个裸 shareId，沿用原生分享开关 |
 | `guangya-file-list.js` / `guangya-file-sort.js` | 指定 XHR pageSize=500、排序缓存和重挂载恢复 |
 | `guangya-folder-browser.js` | 快捷目录多选、原生分页目录接口、Breadcrumb 和已加载当前层过滤；移动/复制沿用原生弹窗 |
 | `guangya-export.js` / `guangya-import.js` | 共享选择读取、秒传导出/导入 |
@@ -32,7 +32,7 @@
 - 使用 macOS、Node 24+，依赖已安装的官方应用。Inspector 为 `127.0.0.1:9237`，连接后核对 `process.execPath`；正常打开助手时，无 Inspector 则正常退出光鸭后重启，有 Inspector 则复用并唤前台。`--attach` 和磁力入口不自动重启已运行进程。
 - 默认不打开 DevTools，从光鸭菜单“云助手”手动打开。修改源码后需重新运行启动器，单独刷新仍使用旧源码快照；业务弹窗有重注入保护，导出弹窗没有同等保护。
 - 系统磁力只接受显式 `magnet:?`，保留编码、去重并排队；检查登录后调用原生 `cloudAdd.openResolver`，不读写剪贴板、不自动保存。已运行只开弹窗，不重注入；正常手动启动助手会尝试注册 magnet 默认处理程序，运行前考虑该副作用。
-- 剪贴板限制仅在通过助手注入的光鸭进程内生效：只替换 `cloud-add-link.match`，保留原生轮询、登录/开关检查及分享处理。每进程首次安装限制后开启原生磁力开关，重复注入不强行重开；版本定位失败必须报错，不能声称已限制。不得增加第二个常驻监听器。
+- 剪贴板适配仅在通过助手注入的光鸭进程内生效：`cloud-add-link.match` 仅显式磁力，`share-link.match` 保留完整链接优先并支持单个裸 shareId；保留原生轮询、登录/开关检查及后续处理。每进程首次安装限制后开启原生磁力开关，重复注入不强行重开；分享开关不自动修改。版本定位失败必须报错，不得增加第二个常驻监听器。
 - 共享 `getSelection()` 读取 React 当前提交树，同一提交的 selectedItems/dataSource，覆盖离屏项；缺失选中 ID 必须报错。导出、重命名、电影、剧集共用，修复需覆盖四入口。
 - 排序 observer 仅在 destroy 时断开，必须覆盖非默认排序后“菜单离开首页、返回首页”多轮恢复；有效表头点击保存，排序菜单不保存。
 - 导出仅 GCID 时以其前32位作为兼容 md5，保留完整 GCID，不能称为真实 MD5。导入传输结果未知不换哈希重复提交；取消不等于撤销服务端任务。

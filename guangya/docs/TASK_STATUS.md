@@ -1,5 +1,17 @@
 # 光鸭云盘注入脚本：任务进度与接续说明
 
+## 剪贴板支持单个裸 shareId（2026-11-03）
+
+- 用户提供 4 个分享 ID，均为 19 位 ASCII 数字、分隔 `_`、16 位后缀；后缀自身可含 `_`，不按所有下划线分段。不推断数字或后缀的编码含义。仅按样本接受 `^\d{19}_[A-Za-z0-9_-]{16}$`（允许首尾空白），不是服务端有效性保证；夹杂文字、多个 ID、错误长度或外站 URL 不新增匹配。
+- guangya-clipboard.mjs 增加 extendShareClipboard，仅替换已有 share-link.match：先调用原 matcher 保留完整链接及提取码，未命中且为单个裸 ID 时在函数内拼标准 HTTPS 分享链接，再交回原 matcher。复用原生轮询、登录检查、分享识别开关、去重和 handle；不新增监听器、不读写真实剪贴板、不修改分享开关，不触发自动保存。启动器在首次安装及已有磁力补丁复用两条分支均安装该扩展，要求 clipboardShareId=true。幂等与 dispose 保护其他补丁。
+- 新增 scripts/check-share-id.mjs，旧源码先在缺少扩展断言失败；修复后覆盖四样本、完整链接/提取码、误匹配、幂等/销毁、登录/开关/其他 handler 隔离。原磁力 self-test 增加序列化安装及 ID 检查。全部 JS/MJS（含 scripts）语法、scripts/check-*.mjs、磁力及剪贴板 self-test、git diff --check 通过。
+- --attach 返回 clipboardShareId=true。校验 Inspector process.execPath 后只调用原生 matcher、不调用 handle：4 个裸 ID 返回均与完整链接一致，提取码保留，混合文本/多 ID/外站 URL 拒绝；当前原生分享开关读取为 true，未修改。未访问用户提供的分享内容、未触发分享窗口/云盘写入；真实复制后的轮询及分享弹窗仍待用户操作验收。`node build-app.mjs` 通过；备份旧助手至 `dist/backups/20261103-share-id-y0h9j8ls/光鸭云助手.app` 后更新安装版。备份/安装签名、安装后全部脚本与内置 Node 一致性检查通过。
+
+## 按用户要求重新编译并替换助手（2026-11-03）
+
+- `node build-app.mjs` 通过，重新生成 arm64、Node v26.12.1、最低 macOS 13.5 的本机 ad-hoc 签名助手。核对源/目标 bundle id 后备份旧助手至 `dist/backups/20261103-rebuild-ou2qp9db/光鸭云助手.app`，再替换 `/Applications/光鸭云助手.app`。
+- 构建、备份及安装产物签名验证通过；安装后全部脚本及内置 Node 与构建/源码一致。未启动或重注入客户端、未修改官方光鸭安装包、云盘数据、系统设置或 Git 索引/历史。本轮只验证构建与替换，不新增实机行为验收。
+
 ## 快捷目录按源码特征定位原生依赖（2026-11-03）
 
 - 用户要求按源码特征定位候选。范围为刚适配的快捷目录依赖；移除 guangya-folder-browser.js 中 23219/30287/5036/4179/92061/65487 及 aF/$n/FU/Ay/Wr/hS/oDp 的硬编码，改为扫描当前 Webpack 工厂源码，匹配后检查导出对象、函数或 forwardRef.render；不调用候选函数来试探。分别定位 Modal、Button、目录分页 Hook、frame store 创建函数、目录列表请求、NiceModal、useModal、目录类型常量。函数特征采用业务属性/错误文字/端点，组件采用 swangpan 类名和属性。

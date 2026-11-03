@@ -1,3 +1,29 @@
+// Only accept a standalone ID; let the native parser validate the canonical origin.
+export function extendShareClipboard(service) {
+  const key = '__guangyaShareIdClipboard';
+  const handlers = service?.handlers?.filter(handler => handler.id === 'share-link');
+  if (!service?.initialized || handlers?.length !== 1 || typeof handlers[0].match !== 'function') throw Error('原生分享剪贴板接口不兼容');
+  const handler = handlers[0], previous = globalThis[key];
+  if (previous?.handler === handler && handler.match === previous.match) return previous;
+  previous?.dispose();
+  const original = handler.match;
+  function match(text, ...args) {
+    const native = original.call(this, text, ...args);
+    if (native || typeof text !== 'string') return native;
+    const id = text.trim();
+    // ponytail: sample-based 19+16 shape; revise only with verified additional formats.
+    if (!/^\d{19}_[A-Za-z0-9_-]{16}$/.test(id)) return native;
+    return original.call(this, 'https://www.guangyapan.com/s/' + id, ...args);
+  }
+  const state = { service, handler, match, dispose() {
+    if (handler.match === match) handler.match = original;
+    if (globalThis[key] === state) delete globalThis[key];
+  } };
+  handler.match = match;
+  globalThis[key] = state;
+  return state;
+}
+
 // Serialized into the main-process bundle's scope. Keep native dispatch and settings intact.
 export function restrictMagnetClipboard(service, extractLinks) {
   const key = '__guangyaMagnetClipboard';
@@ -37,7 +63,10 @@ export function locateMagnetClipboard(source) {
 export async function installMagnetClipboard() {
   const key = '__guangyaMagnetClipboard';
   const current = globalThis[key];
-  if (current?.ready && current.service.handlers.includes(current.handler) && current.handler.match === current.match) return { clipboardMagnetOnly: true, alreadyInstalled: true };
+  if (current?.ready && current.service.handlers.includes(current.handler) && current.handler.match === current.match) {
+    extendShareClipboard(current.service);
+    return { clipboardMagnetOnly: true, clipboardShareId: true, alreadyInstalled: true };
+  }
   const { Session } = process.mainModule.require('node:inspector');
   const session = new Session(), scripts = [];
   const post = (method, params = {}) => new Promise((resolve, reject) => session.post(method, params, (error, result) => error ? reject(error) : resolve(result)));
@@ -56,12 +85,13 @@ export async function installMagnetClipboard() {
       if (globalThis[${JSON.stringify(resultKey)}]) return false;
       try {
         const state = (${restrictMagnetClipboard.toString()})(${target.service}, ${target.extract});
+        (${extendShareClipboard.toString()})(state.service);
         globalThis[${JSON.stringify(resultKey)}] = { pending: true };
         ${target.settings}.settings.patchGeneral({ clipboardAutoDetectEnabled: true }).then(() => {
           state.ready = true;
-          globalThis[${JSON.stringify(resultKey)}] = { clipboardMagnetOnly: true };
+          globalThis[${JSON.stringify(resultKey)}] = { clipboardMagnetOnly: true, clipboardShareId: true };
         }, () => { globalThis[${JSON.stringify(resultKey)}] = { error: '无法开启原生磁力识别开关' }; });
-      } catch (error) { globalThis[${JSON.stringify(resultKey)}] = { error: '无法限制原生磁力剪贴板接口：' + error.message }; }
+      } catch (error) { globalThis[${JSON.stringify(resultKey)}] = { error: '无法安装原生剪贴板适配：' + error.message }; }
       return false;
     })()`;
     ({ breakpointId: breakpoint } = await post('Debugger.setBreakpoint', {
@@ -96,7 +126,7 @@ if (process.argv[2] === '--self-test' && import.meta.url === (await import('node
     const parser=text=>Array.from(text.matchAll(/magnet:\\?[^\\s]+/gi),m=>({start:m.index,end:m.index+m[0].length,url:m[0]}));
     const extract=text=>{const links=parser(text);if(/^[0-9a-f]{40}$/.test(text))links.push({start:0,end:text.length,url:'magnet:?xt=urn:btih:'+text});return links};
     const oQ={settings:{enabled:false,writes:0,getGeneral(){return{clipboardAutoDetectEnabled:this.enabled}},async patchGeneral(p){if(this.fail)throw Error('unavailable');this.writes++;this.enabled=p.clipboardAutoDetectEnabled}}};
-    const share={id:'share-link',match:()=>({share:true})};
+    const share={id:'share-link',match:text=>{const m=text.match(/https:\\/\\/www\\.guangyapan\\.com\\/s\\/([^\\s?]+)/);return m?{shareId:m[1],sourceUrl:m[0]}:null}};
     function factory(){return{id:"cloud-add-link",match:e=>Array.from(extract(e).map(x=>x.url))}};
     const service=new class{init(e){this.handlers=e.handlers;this.initialized=true}};
     service.init({handlers:[share,{...factory(),requiresSignedIn:true,isEnabled:()=>oQ.settings.getGeneral().clipboardAutoDetectEnabled,handle:()=>({handled:true})}]});
@@ -107,10 +137,12 @@ if (process.argv[2] === '--self-test' && import.meta.url === (await import('node
   const fixtureState = globalThis.fixture, handler = fixtureState.service.handlers[1], original = handler.match;
   process.mainModule ??= { require: createRequire(import.meta.url) };
   // Exercise the serialized form, as the launcher does.
-  const run = vm.runInThisContext(`(() => {const locateMagnetClipboard=${locateMagnetClipboard.toString()};const restrictMagnetClipboard=${restrictMagnetClipboard.toString()};return (${installMagnetClipboard.toString()});})()`);
+  const run = vm.runInThisContext(`(() => {const extendShareClipboard=${extendShareClipboard.toString()};const locateMagnetClipboard=${locateMagnetClipboard.toString()};const restrictMagnetClipboard=${restrictMagnetClipboard.toString()};return (${installMagnetClipboard.toString()});})()`);
   try {
     assert.deepEqual(original('https://a/a.webp'), []);
     assert.equal((await run()).clipboardMagnetOnly, true);
+    assert.equal((await run()).clipboardShareId, true);
+    assert.equal(fixtureState.share.match('1964528921476411450_aelxWVWH_aYevl3z').shareId, '1964528921476411450_aelxWVWH_aYevl3z');
     assert.equal(fixtureState.settings.enabled, true);
     assert.equal(fixtureState.settings.writes, 1);
     for (const text of ['https://a/a.webp', 'ftp://a/file', 'ed2k://abc', 'thunder://abc', '0123456789abcdef0123456789abcdef01234567']) assert.equal(handler.match(text), null);
@@ -135,6 +167,7 @@ if (process.argv[2] === '--self-test' && import.meta.url === (await import('node
   } finally {
     clearInterval(fixtureState.timer);
     globalThis.__guangyaMagnetClipboard?.dispose();
+    globalThis.__guangyaShareIdClipboard?.dispose();
     delete globalThis.fixture;
   }
 }
