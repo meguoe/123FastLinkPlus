@@ -4,27 +4,51 @@
   window[key]?.destroy();
   let require;
   window.webpackChunk_swangpan_pc?.push([['guangya-folder-browser-' + Date.now()], {}, value => { require = value; }]);
-  const nativeUI = require?.(23219), hooks = require?.(5036), storeModule = require?.(30287), files = require?.(4179);
-  const { Ay: NiceModal, hS: useModal } = require?.(92061) ?? {};
-  const safebox = require?.(65487)?.oDp?.SAFEBOX;
-  if (typeof hooks?.FU !== 'function' || typeof storeModule?.Ay !== 'function' || typeof files?.Wr !== 'function' ||
-    typeof NiceModal?.create !== 'function' || typeof NiceModal?.show !== 'function' || typeof useModal !== 'function' ||
-    !nativeUI?.aF || !nativeUI?.$n || safebox === undefined) throw Error('当前应用快捷目录接口不兼容，请核对光鸭版本');
+  const modules = Object.entries(require?.m ?? {}).map(([id, factory]) => ({ id, source: String(factory) }));
+  function findNative(label, markers, matches) {
+    const candidates = new Set();
+    for (const { id, source } of modules) {
+      if (!markers.every(marker => source.includes(marker))) continue;
+      const exports = require(id);
+      for (const value of [exports, ...Object.values(exports ?? {})]) {
+        if (value && matches(value)) candidates.add(value);
+      }
+    }
+    if (candidates.size !== 1) throw Error(`无法唯一定位快捷目录${label}（匹配 ${candidates.size}），请核对光鸭版本`);
+    return [...candidates][0];
+  }
+  const hasSource = (value, markers) => typeof value === 'function' && markers.every(marker => String(value).includes(marker));
+  const Modal = findNative('弹窗组件', ['swangpan-modal__container', 'closeOnPressEscape'],
+    value => hasSource(value.render, ['swangpan-modal__container', 'closeOnPressEscape', 'maskClosable']));
+  const Button = findNative('按钮组件', ['swangpan-button__root', 'iconPosition'],
+    value => hasSource(value.render, ['swangpan-button__root', 'iconPosition', 'loading']));
+  const useFolderFrames = findNative('分页接口', ['Failed to load file list frame:', 'rootFrameTitle', 'loadMoreActive'],
+    value => hasSource(value, ['Failed to load file list frame:', 'rootFrameTitle', 'loadMoreActive']));
+  const createFolderStore = findNative('状态仓库', ['firstPageParam', 'activeFramePathKey', 'replaceFramePage'],
+    value => hasSource(value, ['firstPageParam', 'activeFramePathKey', 'replaceFramePage', 'syncPath']));
+  const getFolders = findNative('列表请求', ['/userres/v1/file/get_file_list'],
+    value => hasSource(value, ['/userres/v1/file/get_file_list', 'parentId', 'signal', 'extra']));
+  const NiceModal = findNative('弹窗管理', ['NiceModalId', 'nice-modal/show'],
+    value => ['create', 'show', 'hide', 'register'].every(name => typeof value[name] === 'function'));
+  const useModal = findNative('弹窗 Hook', ['No modal id found in NiceModal.useModal.'],
+    value => hasSource(value, ['No modal id found in NiceModal.useModal.']));
+  const safebox = findNative('类型常量', ['SAFEBOX', 'NORMAL', 'TRASH'],
+    value => typeof value.SAFEBOX === 'number' && value.NORMAL === 0 && typeof value.TRASH === 'number').SAFEBOX;
   const { React, Input, Breadcrumb, ConfigProvider, getThemeProviders } = window.__guangyaNativeUI.getFolderBrowserRuntime();
   const { createElement: h, useState, useEffect } = React;
   const params = { pageSize: 100, resType: 2 };
-  const fetcher = (body, signal) => files.Wr(body, { signal });
+  const fetcher = (body, signal) => getFolders(body, { signal });
   let active = 0;
 
   // Use the same frame cache, pagination and cancellation as the native 1.1.2 picker.
   // Moving/copying keeps the native modal and its request flow entirely intact.
   const ShortcutPicker = NiceModal.create(({ initialItems }) => {
     const modal = useModal();
-    const [store] = useState(() => storeModule.Ay());
+    const [store] = useState(() => createFolderStore());
     const [folderPath, setFolderPath] = useState([]);
     const [query, setQuery] = useState('');
     const [selection, setSelection] = useState(() => initialItems.map(item => ({ ...item })));
-    const tree = hooks.FU({ store, mode: 'page', folderPath, params, fetcher,
+    const tree = useFolderFrames({ store, mode: 'page', folderPath, params, fetcher,
       rootFrameId: '', rootFrameTitle: '全部文件', enabled: modal.visible });
     useEffect(() => { active++; return () => { active--; }; }, []);
     const currentId = folderPath.at(-1)?.id ?? '';
@@ -47,7 +71,7 @@
     const theme = providers.find(provider => provider.value.token)?.value;
     const breadcrumbs = [{ title: '全部文件', onClick: () => navigate([]) },
       ...folderPath.map((item, index) => ({ title: item.name, onClick: () => navigate(folderPath.slice(0, index + 1)) }))];
-    return h(nativeUI.aF, { open: modal.visible, title: '选择快捷目录', width: 680, footer: null,
+    return h(Modal, { open: modal.visible, title: '选择快捷目录', width: 680, footer: null,
       onCancel: cancel, afterClose: modal.remove, classNames: { body: 'guangya-shortcut-picker-body' } },
       h('div', { className: 'guangya-shortcut-picker', 'data-guangya-folder-browser': '' },
         h(ConfigProvider, { prefixCls: config?.getPrefixCls(), theme: theme ? { token: theme.token } : undefined }, h(Breadcrumb, { items: breadcrumbs })),
@@ -70,9 +94,9 @@
             h('button', { type: 'button', onClick: () => tree.loadMoreActive() }, '加载更多')) : null),
         h('div', { className: 'guangya-shortcut-picker-actions' },
           h('span', { role: 'status', 'aria-live': 'polite' }, `已选 ${selection.length}/5`),
-          h(nativeUI.$n, { className: 'guangya-shortcut-clear', variant: 'outline', disabled: !selection.length, onClick: () => setSelection([]) }, '清空'),
-          h(nativeUI.$n, { variant: 'outline', onClick: cancel }, '取消'),
-          h(nativeUI.$n, { variant: 'primary', disabled: busy || !!error,
+          h(Button, { className: 'guangya-shortcut-clear', variant: 'outline', disabled: !selection.length, onClick: () => setSelection([]) }, '清空'),
+          h(Button, { variant: 'outline', onClick: cancel }, '取消'),
+          h(Button, { variant: 'primary', disabled: busy || !!error,
             onClick: () => { if (!busy && !error) { modal.resolve(selection); modal.hide(); } } }, '确定'))));
   });
   const style = document.createElement('style');

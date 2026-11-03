@@ -83,7 +83,7 @@ const pickerSource = readFileSync(new URL('../guangya-folder-browser.js', import
 let slots = [], cursor = 0, component, props, options, refreshes = 0, more = 0;
 const effects = [];
 const React = {
-  createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
+  createElement: (type, props, ...children) => ({ type: type?.render ? type.render() : type, props: props || {}, children }),
   useState(initial) {
     const index = cursor++;
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
@@ -102,18 +102,24 @@ let frame = { id: '', hydrated: true, isLoading: false, hasMore: true };
 let items = [...folders, { fileId: 'safe', fileName: '保险箱', dirType: 20, resType: 2 }];
 let resolved, cancelled = false, request;
 const modal = { visible: true, resolve: value => { resolved = value; }, hide() {}, remove() {}, reject: value => { cancelled = value; } };
-const NiceModal = { create: value => value, show: (next, initial) => { component = next; props = initial; } };
+const NiceModal = { hide() {}, register() {}, create: value => value, show: (next, initial) => { component = next; props = initial; } };
 const originalShow = NiceModal.show;
 const store = {};
 const modules = {
-  23219: { aF: 'modal', $n: 'button' }, 92061: { Ay: NiceModal, hS: () => modal },
-  5036: { FU: value => { options = value; return { activeFrame: frame, items, isLoading: frame?.isLoading,
+  23219: { aF: { render() { /* swangpan-modal__container closeOnPressEscape maskClosable */ return 'modal'; } },
+    $n: { render() { /* swangpan-button__root iconPosition loading */ return 'button'; } } },
+  92061: { Ay: NiceModal, hS: () => { /* No modal id found in NiceModal.useModal. */ return modal; } },
+  5036: { FU: value => { /* Failed to load file list frame: rootFrameTitle loadMoreActive */ options = value; return { activeFrame: frame, items, isLoading: frame?.isLoading,
     refreshActive: () => { refreshes++; }, loadMoreActive: () => { more++; } }; } },
-  30287: { Ay: () => store }, 4179: { Wr: (...args) => { request = args; } },
-  65487: { oDp: { SAFEBOX: 20 } },
+  30287: { Ay: () => { /* firstPageParam activeFramePathKey replaceFramePage syncPath */ return store; } },
+  4179: { Wr: (...args) => { /* /userres/v1/file/get_file_list parentId signal extra */ request = args; } },
+  65487: { oDp: { SAFEBOX: 20, NORMAL: 0, TRASH: 4 } },
 };
 const requireModule = id => modules[id];
-requireModule.m = {};
+requireModule.m = Object.fromEntries(Object.entries(modules).map(([id, exports]) => [id, {
+  toString: () => Object.values(exports).map(value => String(value?.render ?? value)).join('\n') +
+    (id === '92061' ? ' NiceModalId nice-modal/show' : id === '65487' ? ' SAFEBOX NORMAL TRASH' : ''),
+}]));
 const pickerWindow = { __guangyaNativeUI: { getFolderBrowserRuntime: () => ({ React, Input: 'input', Breadcrumb: 'breadcrumb', ConfigProvider: 'provider', getThemeProviders: () => [] }) },
   webpackChunk_swangpan_pc: { push: chunk => chunk[2](requireModule) } };
 const document = { createElement: () => ({ remove() {} }), head: { append() {} } };
