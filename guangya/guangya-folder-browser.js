@@ -34,14 +34,84 @@
     value => hasSource(value, ['No modal id found in NiceModal.useModal.']));
   const safebox = findNative('类型常量', ['SAFEBOX', 'NORMAL', 'TRASH'],
     value => typeof value.SAFEBOX === 'number' && value.NORMAL === 0 && typeof value.TRASH === 'number').SAFEBOX;
-  const { React, Input, Breadcrumb, ConfigProvider, getThemeProviders } = window.__guangyaNativeUI.getFolderBrowserRuntime();
+  const { React, client, Input, Breadcrumb, ConfigProvider, getThemeProviders } = window.__guangyaNativeUI.getFolderBrowserRuntime();
   const { createElement: h, useState, useEffect } = React;
   const params = { pageSize: 100, resType: 2 };
   const fetcher = (body, signal) => getFolders(body, { signal });
   let active = 0;
 
+  function destinationPath(body) {
+    const fiberKey = Object.keys(body).find(name => name.startsWith('__reactFiber$'));
+    const anchor = body[fiberKey];
+    let root = anchor;
+    while (root?.return) root = root.return;
+    const pending = [[root?.stateNode?.current, null]];
+    while (pending.length) {
+      const [fiber, parent] = pending.pop();
+      if (!fiber) continue;
+      const props = fiber.memoizedProps;
+      const picker = ['移动到', '复制到'].includes(props?.title) &&
+        hasSource(fiber.type, ['加载上次文件夹失败', '返回文件夹列表', 'folderPath:']) ? fiber : parent;
+      if (fiber === anchor || fiber === anchor?.alternate) {
+        if (!picker) break;
+        // 光鸭 1.1.2：目录路径 useState 紧跟分页 store useState。
+        for (let hook = picker.memoizedState; hook; hook = hook.next) {
+          const path = hook.next;
+          if (typeof hook.memoizedState?.getState === 'function' && hook.queue &&
+              Array.isArray(path?.memoizedState) && typeof path.queue?.dispatch === 'function') {
+            return { path: path.memoizedState, setPath: path.queue.dispatch, props: picker.memoizedProps };
+          }
+        }
+        break;
+      }
+      if (fiber.sibling) pending.push([fiber.sibling, parent]);
+      if (fiber.child) pending.push([fiber.child, picker]);
+    }
+    throw Error('当前光鸭版本的目标目录弹窗不兼容');
+  }
+
+  let getFolderDetail;
+  async function openDestinationShortcut(body, id, isCurrent = () => body.isConnected) {
+    const { path, setPath, props } = destinationPath(body);
+    if (props.rootValue) throw Error('快捷目录不在当前范围内');
+    getFolderDetail ??= findNative('详情请求', ['/userres/v1/file/get_file_detail'],
+      value => hasSource(value, ['/userres/v1/file/get_file_detail', 'POST', 'body:']));
+    const { data } = await getFolderDetail({ fileId: id });
+    if (!isCurrent()) return;
+    const latest = destinationPath(body);
+    if (latest.setPath !== setPath || latest.path !== path || latest.props.rootValue) return;
+    const file = data?.fileInfo;
+    if (file?.resType !== 2 || file.fileId !== id) throw Error('快捷目录已失效，请重新配置');
+    if (file.dirType === safebox || props.excludeDirTypes?.includes(file.dirType)) throw Error('快捷目录不在当前范围内');
+    const ids = [...(file.fullParentIds ?? '').split('/').filter(Boolean), id];
+    const names = data.location?.split('/');
+    if (ids.length !== names?.length || names.some(name => !name)) throw Error('快捷目录路径信息不匹配');
+    body.querySelector('button[aria-label="返回文件夹列表"]')?.click();
+    setPath(ids.map((id, index) => ({ id, name: names[index] })));
+  }
+
+  function mountDestinationShortcuts(row, body, items) {
+    const root = client.createRoot(row);
+    let busy = false, disposed = false;
+    const isCurrent = () => !disposed && row.isConnected;
+    function render() {
+      root.render(items.map(item => h(Button, {
+        key: item.id, title: item.path, disabled: busy,
+        async onClick() {
+          if (busy || !isCurrent()) return;
+          busy = true;
+          render();
+          try { await openDestinationShortcut(body, item.id, isCurrent); }
+          catch (error) { if (isCurrent()) window.__guangyaMessage.error(error.message || '打开快捷目录失败'); }
+          finally { busy = false; if (isCurrent()) render(); }
+        },
+      }, item.name)));
+    }
+    render();
+    return () => { disposed = true; root.unmount(); row.remove(); };
+  }
+
   // Use the same frame cache, pagination and cancellation as the native 1.1.2 picker.
-  // Moving/copying keeps the native modal and its request flow entirely intact.
   const ShortcutPicker = NiceModal.create(({ initialItems }) => {
     const modal = useModal();
     const [store] = useState(() => createFolderStore());
@@ -115,7 +185,7 @@
     .guangya-shortcut-clear { margin-right:auto; }
   `;
   document.head.append(style);
-  const api = { select(initialItems = []) {
+  const api = { mountDestinationShortcuts, select(initialItems = []) {
     if (window[key] !== api) throw Error('目录选择组件已卸载，请重新注入');
     if (active) throw Error('目录弹窗正在使用，请先关闭');
     return NiceModal.show(ShortcutPicker, { initialItems });

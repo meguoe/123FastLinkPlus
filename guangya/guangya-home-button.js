@@ -16,6 +16,7 @@
     #guangya-directory-shortcuts [aria-disabled="true"] { opacity:.45; cursor:not-allowed; }
     #guangya-shortcut-settings { margin-inline-start:auto; display:flex; align-items:center; justify-content:center; flex:none; min-width:36px; padding:8px; border:0; border-radius:6px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
     #guangya-shortcut-settings:disabled { opacity:.45; cursor:not-allowed; }
+    [data-guangya-destination-shortcuts] { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding-bottom:6px; }
   `;
   document.head.append(style);
 
@@ -162,6 +163,25 @@
     }
   }
 
+  const destinationRows = new Map();
+  function updateDestinationShortcuts() {
+    for (const [row, unmount] of destinationRows) if (!row.isConnected) {
+      unmount();
+      destinationRows.delete(row);
+    }
+    if (!directoryItems.length) return;
+    for (const body of document.querySelectorAll('.swangpan-modal__body')) {
+      const title = body.parentElement?.querySelector('[data-slot="title"]')?.textContent;
+      if (!['移动到', '复制到'].includes(title)) continue;
+      const header = body.querySelector(':scope > div:has(input[aria-label="搜索文件夹"])');
+      if (!header || body.querySelector(':scope > [data-guangya-destination-shortcuts]')) continue;
+      const row = document.createElement('div');
+      row.setAttribute('data-guangya-destination-shortcuts', '');
+      header.after(row);
+      destinationRows.set(row, window.__guangyaFolderBrowser.mountDestinationShortcuts(row, body, directoryItems));
+    }
+  }
+
   function schedule() {
     if (destroyed || scheduled) return;
     scheduled = true;
@@ -185,6 +205,7 @@
   }
   function update() {
     updateShortcuts();
+    updateDestinationShortcuts();
     const active = document.querySelector('a[href="#/home"].active, a[href="#/home"][aria-current="page"]');
     hideRecent(active);
     const cloud = active ? document.querySelector('main > section button[data-ui="button"]:has([aria-label="addcloud"])') : null;
@@ -207,6 +228,8 @@
       if (destroyed) return;
       destroyed = true; observer.disconnect(); dropdown?.destroy(); host.remove(); style.remove();
       shortcuts.remove(); settings.remove(); shortcutBar?.removeAttribute('data-guangya-shortcut-bar');
+      for (const unmount of destinationRows.values()) unmount();
+      destinationRows.clear();
       for (const node of hidden) node.removeAttribute('data-guangya-home-recent-hidden');
       hidden.clear();
       if (window[key] === api) delete window[key];
