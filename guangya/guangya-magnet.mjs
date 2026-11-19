@@ -6,6 +6,27 @@ export function normalizeMagnetLinks(links) {
   }))];
 }
 
+// Explicit execArgv prevents the cloud-add worker inheriting Electron's startup break.
+export function installCloudTreeWorkerFix() {
+  const main = process.mainModule;
+  const workers = main.require('node:worker_threads');
+  const key = '__guangyaCloudTreeWorker';
+  if (globalThis[key] === workers.Worker) return;
+  const { dirname, join } = main.require('node:path');
+  const cloudWorker = join(dirname(main.filename), 'cloudTreeWorker.cjs');
+  workers.Worker = new Proxy(workers.Worker, {
+    construct(Worker, args, newTarget) {
+      const [filename, options] = args;
+      if (filename === cloudWorker && options?.execArgv === undefined) {
+        const execArgv = process.execArgv.filter(arg => !/^--inspect-brk(?:=|$)/.test(arg));
+        args[1] = { ...options, execArgv };
+      }
+      return Reflect.construct(Worker, args, newTarget);
+    },
+  });
+  globalThis[key] = workers.Worker;
+}
+
 // Serialized into Electron's main process together with normalizeMagnetLinks.
 export async function openMagnetLinks(links) {
   links = normalizeMagnetLinks(links);
@@ -68,5 +89,21 @@ if (process.argv[1] && import.meta.url === (await import('node:url')).pathToFile
   await context.open([quoted]);
   assert.equal(calls.at(-1).urls[0], quoted);
   assert.equal(context.pwned, undefined);
-  console.log('磁力直达弹窗离线检查通过');
+  const workers = { Worker: class Worker {
+    constructor(filename, options) { this.options = options; }
+  } };
+  const workerContext = vm.createContext({ process: {
+    execArgv: ['--inspect-brk=127.0.0.1:9237', '--no-warnings'],
+    mainModule: { filename: '/app/out/main/index.cjs', require: name => name === 'node:path' ? { dirname: () => '/app/out/main', join: (...parts) => parts.join('/') } : workers },
+  } });
+  vm.runInContext(`(${installCloudTreeWorkerFix.toString()})();`, workerContext);
+  const patchedWorker = workers.Worker;
+  vm.runInContext(`(${installCloudTreeWorkerFix.toString()})();`, workerContext);
+  assert.equal(workers.Worker, patchedWorker);
+  const cloudWorker = '/app/out/main/cloudTreeWorker.cjs';
+  assert.deepEqual(Array.from(new workers.Worker(cloudWorker).options.execArgv), ['--no-warnings']);
+  assert.equal(new workers.Worker('/other/cloudTreeWorker.cjs').options, undefined);
+  const explicit = { execArgv: [] };
+  assert.equal(new workers.Worker(cloudWorker, explicit).options, explicit);
+  console.log('磁力直达弹窗和云添加 Worker 离线检查通过');
 }

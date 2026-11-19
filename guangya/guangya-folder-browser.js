@@ -2,8 +2,7 @@
   if (window.location?.protocol === 'file:' && !window.location.pathname.endsWith('/main.html')) return { folderBrowserInstalled: false, reason: '非主窗口' };
   const key = '__guangyaFolderBrowser';
   window[key]?.destroy();
-  let require;
-  window.webpackChunk_swangpan_pc?.push([['guangya-folder-browser-' + Date.now()], {}, value => { require = value; }]);
+  const require = window.__guangyaNativeUI.getNativeRequire();
   const modules = Object.entries(require?.m ?? {}).map(([id, factory]) => ({ id, source: String(factory) }));
   function findNative(label, markers, matches) {
     const candidates = new Set();

@@ -4,7 +4,7 @@ import os from 'node:os';
 import { access, readFile } from 'node:fs/promises';
 import { installTmdbBridge } from './guangya-tmdb-bridge.mjs';
 import { installAppMenu } from './guangya-app-menu.mjs';
-import { normalizeMagnetLinks, openMagnetLinks } from './guangya-magnet.mjs';
+import { installCloudTreeWorkerFix, normalizeMagnetLinks, openMagnetLinks } from './guangya-magnet.mjs';
 import { extendShareClipboard, restrictMagnetClipboard, locateMagnetClipboard, installMagnetClipboard } from './guangya-clipboard.mjs';
 
 const magnetArgument = process.argv.indexOf('--magnet');
@@ -315,6 +315,7 @@ try {
     }
     if (!foreground) throw Error('未找到光鸭云盘主窗口或登录窗口，无法唤到前台');
   }
+  await evaluate(`(${installCloudTreeWorkerFix.toString()})()`);
   const clipboard = await evaluate(`(() => {
     const extendShareClipboard = ${extendShareClipboard.toString()};
     const restrictMagnetClipboard = ${restrictMagnetClipboard.toString()};

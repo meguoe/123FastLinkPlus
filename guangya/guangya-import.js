@@ -1,17 +1,12 @@
 (() => {
   const key = '__guangyaImport';
   window[key]?.destroy();
-  let nativeRequire, modal, controller;
+  let modal, controller;
   let destroyed = false;
   const prefix = '[光鸭自定义]';
 
   function requestApi(path, options) {
-    if (!nativeRequire) {
-      window.webpackChunk_swangpan_pc?.push([['guangya-assistant-import-' + Date.now()], {}, require => { nativeRequire = require; }]);
-    }
-    const request = nativeRequire?.(34118)?.E;
-    if (typeof request !== 'function') throw Error('当前应用版本的请求接口不兼容');
-    return request(path, { ...options, extra: { skipSafeboxUnlock: true } });
+    return window.__guangyaNativeUI.request(path, options);
   }
 
   function getDestination() {

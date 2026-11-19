@@ -2,21 +2,13 @@
   const key = '__guangyaExport';
   window[key]?.destroy();
   const prefix = '[光鸭自定义]';
-  let nativeRequire;
   let dialog;
   let modal;
   let controller;
   let destroyed = false;
 
   function requestApi(path, options) {
-    if (!nativeRequire) {
-      const chunks = window.webpackChunk_swangpan_pc;
-      if (!chunks) throw Error('当前应用版本不支持读取请求模块');
-      chunks.push([['guangya-assistant-export-' + Date.now()], {}, require => { nativeRequire = require; }]);
-    }
-    const request = nativeRequire?.(34118)?.E;
-    if (typeof request !== 'function') throw Error('当前应用版本的请求接口不兼容');
-    return request(path, { ...options, extra: { skipSafeboxUnlock: true } });
+    return window.__guangyaNativeUI.request(path, options);
   }
 
   function getSelection() {

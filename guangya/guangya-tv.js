@@ -6,7 +6,7 @@
   const configId = isMovie ? 'guangya-movie-tmdb-config-dialog' : 'guangya-tmdb-config-dialog';
   const key = isMovie ? '__guangyaMovie' : '__guangyaTv';
   window[key]?.destroy();
-  let nativeRequire, view, configurationView, busy = false, stopping = false, destroyed = false;
+  let view, configurationView, busy = false, stopping = false, destroyed = false;
   const defaultFields = isMovie ? ['影片名', '上映时间', '分辨率', '视频编码', '音频编码', '来源', 'TMDB'] : ['剧集名', '季集信息', '上映时间', '分辨率', '来源', '视频编码', '音频编码'];
   const allowedFields = [...new Set([...defaultFields, 'TMDB'])];
   const storageKey = 'guangya-assistant-tmdb-key';
@@ -206,10 +206,7 @@
   }
 
   function requestApi(path, options) {
-    if (!nativeRequire) window.webpackChunk_swangpan_pc?.push([['guangya-' + type + '-' + Date.now()], {}, require => { nativeRequire = require; }]);
-    const request = nativeRequire?.(34118)?.E;
-    if (typeof request !== 'function') throw Error('当前应用版本的请求接口不兼容');
-    return request(path, { ...options, extra: { skipSafeboxUnlock: true } });
+    return window.__guangyaNativeUI.request(path, options);
   }
   const successful = response => response && (response.code === 0 || (response.code === undefined && response.msg === 'success'));
   async function post(request, path, body, signal) {

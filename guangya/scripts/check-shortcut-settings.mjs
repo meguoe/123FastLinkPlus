@@ -120,8 +120,10 @@ requireModule.m = Object.fromEntries(Object.entries(modules).map(([id, exports])
   toString: () => Object.values(exports).map(value => String(value?.render ?? value)).join('\n') +
     (id === '92061' ? ' NiceModalId nice-modal/show' : id === '65487' ? ' SAFEBOX NORMAL TRASH' : ''),
 }]));
-const pickerWindow = { __guangyaNativeUI: { getFolderBrowserRuntime: () => ({ React, Input: 'input', Breadcrumb: 'breadcrumb', ConfigProvider: 'provider', getThemeProviders: () => [] }) },
-  webpackChunk_swangpan_pc: { push: chunk => chunk[2](requireModule) } };
+const pickerWindow = { __guangyaNativeUI: {
+  getNativeRequire: () => requireModule,
+  getFolderBrowserRuntime: () => ({ React, Input: 'input', Breadcrumb: 'breadcrumb', ConfigProvider: 'provider', getThemeProviders: () => [] }),
+} };
 const document = { createElement: () => ({ remove() {} }), head: { append() {} } };
 assert.doesNotThrow(() => vm.runInNewContext(pickerSource, { window: pickerWindow, document }), '1.1.2 has no legacy tree or folder factory');
 assert.equal(NiceModal.show, originalShow, '移动/复制及其他原生弹窗均不得拦截');

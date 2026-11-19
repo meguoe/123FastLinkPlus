@@ -1,6 +1,5 @@
 (() => {
   window.__guangyaMessage?.dispose?.();
-  let nativeRequire;
   const roots = new Map();
   const style = document.createElement('style');
   style.textContent = `
@@ -28,13 +27,7 @@
   } };
   for (const method of ['success', 'error', 'warning', 'info', 'loading', 'destroy']) {
     api[method] = (...args) => {
-      if (!nativeRequire) {
-        const chunks = window.webpackChunk_swangpan_pc;
-        if (!chunks) throw Error('当前应用版本不支持读取 Message 接口');
-        chunks.push([['guangya-assistant-message-' + Date.now()], {}, require => { nativeRequire = require; }]);
-      }
-      const message = nativeRequire?.(23219)?.iU;
-      if (typeof message?.[method] !== 'function') throw Error('当前应用版本的原生 Message 接口不兼容');
+      const message = window.__guangyaNativeUI.getMessage();
       if (method !== 'destroy') raise();
       return message[method](...args);
     };

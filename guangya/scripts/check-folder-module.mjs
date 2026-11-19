@@ -47,3 +47,44 @@ const invalid = fixture(); invalid.manager = { create() {}, show() {} };
 assert.throws(() => locate(invalid), /无法唯一定位/);
 assert(!/require(?:\?\.)?\(\d+\)/.test(source), '快捷目录不应保留模块编号');
 console.log('源码特征定位：编号/导出名变化、零/多匹配、接口校验、无关工厂不执行检查通过');
+
+const nativeUI = readFileSync(new URL('../guangya-native-ui.js', import.meta.url), 'utf8');
+for (const chunkKey of ['rspackChunk_swangpan_pc', 'webpackChunk_swangpan_pc']) {
+  function request(path, options) {
+    // skipAuth skipSafeboxAuth skipSafeboxUnlock
+    return { path, options };
+  }
+  const message = Object.fromEntries(['success', 'error', 'warning', 'info', 'loading', 'destroy'].map(name => [name, () => {}]));
+  const client = { createRoot() {} };
+  const fixtures = {
+    httpNew: [String(request), request],
+    uiNew: ['swangpan-message__root', message],
+    react: ['react.transitional.element', { createElement() {}, useState() {} }],
+    client: [chunkKey.startsWith('rspack') ? 'createRoot rendererPackageName:"react-dom"' : 'createRoot hydrateRoot', client],
+    dom: ['flushSync createPortal', { flushSync() {}, createPortal() {} }],
+    input: ['.TextArea = Password', { TextArea: {}, Password: {} }],
+    dropdown: ['dropdownRender destroyOnHidden .Button =', Object.assign(() => {}, { Button: {} })],
+    switch: ['__ANT_SWITCH', { __ANT_SWITCH: true }],
+    select: ['SECRET_COMBOBOX_MODE_DO_NOT_USE .Option =', { Option: {}, OptGroup: {} }],
+    button: ['__ANT_BUTTON', { __ANT_BUTTON: true }],
+  };
+  const modules = Object.fromEntries(Object.entries(fixtures).map(([id, [source]]) => [id, { toString: () => source }]));
+  modules.other = { toString: () => 'unrelated module must not execute' };
+  const requireModule = Object.assign(id => {
+    assert.notEqual(id, 'other');
+    return { renamed: fixtures[id][1] };
+  }, { m: modules });
+  const window = { [chunkKey]: { push: chunk => chunk[2](requireModule) }, __guangyaLoadSegmented: () => ({}) };
+  vm.runInNewContext(nativeUI, { window, document: { getElementById: () => null } });
+  const ui = window.__guangyaNativeUI;
+  assert.equal(ui.getNativeRequire(), requireModule);
+  assert.equal(ui.getFolderBrowserRuntime().client, client);
+  assert.equal(ui.getMessage(), message);
+  const signal = new AbortController().signal;
+  const result = ui.request('/example', { method: 'POST', signal });
+  assert.equal(result.path, '/example');
+  assert.equal(result.options.method, 'POST');
+  assert.equal(result.options.signal, signal);
+  assert.equal(result.options.extra.skipSafeboxUnlock, true);
+}
+console.log('原生运行时：Rspack/Webpack、HTTP 和 Message 动态定位检查通过');

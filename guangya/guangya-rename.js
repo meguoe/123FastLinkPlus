@@ -89,16 +89,8 @@
     return { error: items.some(item => item.error) ? '存在无效名称或重名，请调整规则' : null, items, changed: items.filter(item => item.name !== item.newName).length };
   }
 
-  let nativeRequire;
   function requestApi(path, options) {
-    if (!nativeRequire) {
-      const chunks = window.webpackChunk_swangpan_pc;
-      if (!chunks) throw Error('当前应用版本不支持读取请求模块');
-      chunks.push([['guangya-assistant-rename-' + Date.now()], {}, require => { nativeRequire = require; }]);
-    }
-    const request = nativeRequire?.(34118)?.E;
-    if (typeof request !== 'function') throw Error('当前应用版本的请求接口不兼容');
-    return request(path, { ...options, extra: { skipSafeboxUnlock: true } });
+    return window.__guangyaNativeUI.request(path, options);
   }
 
   async function execute(current, { request = requestApi, signal, shouldStop = () => false, onProgress = () => {} } = {}) {

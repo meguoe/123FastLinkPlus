@@ -72,8 +72,8 @@
     if (restoreAttempts >= maxRestoreAttempts) return;
     restoreAttempts += 1;
     try {
-      let require, flushSync;
-      window.webpackChunk_swangpan_pc?.push([['guangya-sort-' + Date.now()], {}, value => { require = value; }]);
+      const require = window.__guangyaNativeUI.getNativeRequire();
+      let flushSync;
       for (const [id, factory] of Object.entries(require?.m ?? {})) {
         const source = String(factory);
         if (!source.includes('flushSync') || !source.includes('createPortal')) continue;

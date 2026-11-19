@@ -3,14 +3,47 @@
   window[key]?.destroy();
   document.getElementById('guangya-native-input-style')?.remove();
   const instances = new Set();
+  let nativeRequire, nativeRequest, nativeMessage;
   let runtime;
   let destroyed = false;
 
+  function getNativeRequire() {
+    if (!nativeRequire?.m) {
+      const chunks = window.rspackChunk_swangpan_pc ?? window.webpackChunk_swangpan_pc;
+      chunks?.push([['guangya-native-ui-' + Date.now()], {}, value => { nativeRequire = value; }]);
+    }
+    if (!nativeRequire?.m) throw Error('无法定位应用组件，请更新云助手脚本');
+    return nativeRequire;
+  }
+
+  function findNative(sourceMatches, matches, errorMessage) {
+    const require = getNativeRequire();
+    const candidates = new Set();
+    for (const [id, factory] of Object.entries(require.m)) {
+      if (!sourceMatches(String(factory))) continue;
+      const exports = require(id);
+      for (const value of [exports, ...Object.values(exports ?? {})]) if (value && matches(value)) candidates.add(value);
+    }
+    if (candidates.size !== 1) throw Error(errorMessage + '（匹配 ' + candidates.size + '）');
+    return [...candidates][0];
+  }
+
+  const isRequest = source => source.includes('skipAuth') && source.includes('skipSafeboxUnlock');
+  function request(path, options) {
+    nativeRequest ??= findNative(isRequest, value => typeof value === 'function' && isRequest(String(value)),
+      '当前应用版本的请求接口不兼容');
+    return nativeRequest(path, { ...options, extra: { skipSafeboxUnlock: true } });
+  }
+
+  function getMessage() {
+    return nativeMessage ??= findNative(source => source.includes('swangpan-message__root'),
+      value => ['success', 'error', 'warning', 'info', 'loading', 'destroy'].every(name => typeof value[name] === 'function'),
+      '当前应用版本的原生 Message 接口不兼容');
+  }
+
   function resolveRuntime() {
     if (runtime) return runtime;
-    let require;
-    window.webpackChunk_swangpan_pc?.push([['guangya-native-ui-' + Date.now()], {}, value => { require = value; }]);
-    if (!require?.m) throw Error('无法定位应用组件，请更新云助手脚本');
+    const require = getNativeRequire();
     const modules = Object.entries(require.m).map(([id, factory]) => ({ id, source: String(factory) }));
     function find(sourceMatches, matches) {
       for (const { id, source } of modules) {
@@ -21,7 +54,8 @@
       throw Error('当前应用版本的原生组件不兼容');
     }
     const React = find(source => source.includes('react.transitional.element') || source.includes('react.element'), value => typeof value.createElement === 'function' && typeof value.useState === 'function');
-    const client = find(source => source.includes('createRoot') && source.includes('hydrateRoot'), value => typeof value.createRoot === 'function');
+    const client = find(source => source.includes('createRoot') && (source.includes('hydrateRoot') || source.includes('rendererPackageName:"react-dom"')),
+      value => typeof value.createRoot === 'function');
     const dom = find(source => source.includes('flushSync') && source.includes('createPortal'), value => typeof value.flushSync === 'function' && typeof value.createPortal === 'function');
     const Input = find(source => /\.TextArea\s*=/.test(source) && source.includes('Password'), value => !!value.TextArea && !!value.Password);
     const Dropdown = find(source => source.includes('dropdownRender') && source.includes('destroyOnHidden') && /\.Button\s*=/.test(source), value => typeof value === 'function' && !!value.Button);
@@ -393,7 +427,8 @@
     try { render(); return handle; } catch (error) { handle.destroy(); throw error; }
   }
 
-  window[key] = { mountTextArea, mountInput, mountButton, mountTooltip, mountSelect, mountSwitch, mountTag, mountCard, mountCollapse, mountDropdown, mountSegmented,
+  window[key] = { getNativeRequire, getMessage, request,
+    mountTextArea, mountInput, mountButton, mountTooltip, mountSelect, mountSwitch, mountTag, mountCard, mountCollapse, mountDropdown, mountSegmented,
     getFolderBrowserRuntime() { return { ...resolveRuntime(), ...resolveBundledComponents(), getThemeProviders: themeProviders }; },
     destroy() { destroyed = true; for (const instance of [...instances]) instance.destroy(); if (window[key] === this) delete window[key]; } };
 })();

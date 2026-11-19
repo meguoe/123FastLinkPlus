@@ -6,6 +6,8 @@
   const style = document.createElement('style');
   style.textContent = `
     main [data-guangya-home-recent-hidden] { display:none !important; }
+    [data-guangya-native-quick-add-hidden],
+    [data-guangya-native-quick-add-hidden].v6ezfo3 + div { display:none !important; }
     [data-guangya-shortcut-bar] { flex-wrap:wrap; flex:1; min-width:0; }
     [data-guangya-shortcut-bar="configured"] > a[href="#/home/video"],
     [data-guangya-shortcut-bar="configured"] > a[href="#/home/img"],
@@ -206,6 +208,9 @@
   function update() {
     updateShortcuts();
     updateDestinationShortcuts();
+    for (const control of document.querySelectorAll('button.v6ezfo3:not([data-measure-role]), [role="menuitem"][data-menu-id$="-collectFolder"], [role="menuitem"][data-menu-id$="-quickAccess"]')) {
+      control.toggleAttribute('data-guangya-native-quick-add-hidden', control.textContent.trim() === '添加到快捷访问');
+    }
     const active = document.querySelector('a[href="#/home"].active, a[href="#/home"][aria-current="page"]');
     hideRecent(active);
     const cloud = active ? document.querySelector('main > section button[data-ui="button"]:has([aria-label="addcloud"])') : null;
@@ -230,6 +235,8 @@
       shortcuts.remove(); settings.remove(); shortcutBar?.removeAttribute('data-guangya-shortcut-bar');
       for (const unmount of destinationRows.values()) unmount();
       destinationRows.clear();
+      document.querySelectorAll('[data-guangya-native-quick-add-hidden]').forEach(control =>
+        control.removeAttribute('data-guangya-native-quick-add-hidden'));
       for (const node of hidden) node.removeAttribute('data-guangya-home-recent-hidden');
       hidden.clear();
       if (window[key] === api) delete window[key];
