@@ -45,13 +45,18 @@
     element.innerHTML = `
       <div class="swangpan-modal__mask" data-ui="modal" data-slot="mask" aria-hidden="true"></div>
       <div tabindex="-1" class="swangpan-modal__wrapper" data-ui="modal" data-slot="wrapper">
-        <div class="swangpan-modal__container" data-ui="modal" data-slot="container">
-          <button type="button" class="swangpan-modal__close" data-ui="modal" data-slot="close" aria-label="关闭弹窗">
+        <div class="swangpan-modal-panel__root swangpan-modal-panel--variant-default swangpan-modal-panel--surface-default swangpan-modal__container" data-ui="modal" data-slot="container">
+          <button type="button" class="swangpan-modal-panel__close swangpan-modal__close" data-ui="modal" data-slot="close" aria-label="关闭弹窗">
             <span class="swangpan-icon swangpan-icon-close" aria-hidden="true" style="display:inline-flex;line-height:0;font-size:18px"><svg width="1em" height="1em" viewBox="0 0 18 18" fill="none"><path d="m3 3 12 12M15 3 3 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
           </button>
-          <div class="swangpan-modal__header" data-ui="modal" data-slot="header"><div><span class="swangpan-modal__icon" data-ui="modal" data-slot="icon" aria-hidden="true"></span><span class="swangpan-modal__title" data-ui="modal" data-slot="title"></span></div></div>
-          <div class="swangpan-modal__body" data-ui="modal" data-slot="body"></div>
-          <div class="swangpan-modal__footer" data-ui="modal" data-slot="footer"></div>
+          <div class="swangpan-modal-panel__header swangpan-modal__header" data-ui="modal" data-slot="header">
+            <div>
+              <span class="swangpan-modal-panel__icon swangpan-modal__icon" data-ui="modal" data-slot="icon" aria-hidden="true"></span>
+              <span class="swangpan-modal-panel__title swangpan-modal__title" data-ui="modal" data-slot="title"></span>
+            </div>
+          </div>
+          <div class="swangpan-modal-panel__body swangpan-modal__body" data-ui="modal" data-slot="body"></div>
+          <div class="swangpan-modal-panel__footer swangpan-modal__footer" data-ui="modal" data-slot="footer"></div>
         </div>
       </div>`;
     const heading = element.querySelector('[data-slot="title"]');
