@@ -25,12 +25,15 @@
 | `guangya-rename.js` / `guangya-tv.js` | 三种重命名规则、电影/剧集扫描匹配及整理 |
 | `guangya-tmdb-bridge.mjs` | 受限 TMDB 请求、超时、取消和窗口清理 |
 | `guangya-home-button.js` | 首页业务菜单、目录快捷入口及最近文件隐藏 |
+| `guangya-window-guard.mjs` | 主窗口全屏时关闭只退出全屏并保留窗口，避免遗留黑屏 Space |
 | `guangya-{message,modal,native-ui,json-editor}.js` | 共用提示、弹窗、原生组件及编辑器 |
 
 ## 必须保留的行为
 
 - 使用 macOS、Node 24+，依赖已安装的官方应用。Inspector 为 `127.0.0.1:9237`，连接后核对 `process.execPath`；正常打开助手时，无 Inspector 则正常退出光鸭后重启，有 Inspector 则复用并唤前台。`--attach` 和磁力入口不自动重启已运行进程。
 - 默认不打开 DevTools，从光鸭菜单“云助手”手动打开。修改源码后需重新运行启动器，单独刷新仍使用旧源码快照；业务弹窗有重注入保护，导出弹窗没有同等保护。
+- 主窗口全屏保护只接管 `main.html` 窗口的 `hide()`：全屏时退到窗口化并保留窗口，非全屏隐藏仍走原生逻辑；不改写官方 close 处理，也不扩到播放器等其它窗口。
+- 光鸭升级后必须复查这个缺陷：读新版 `app.asar` 主进程里 `main.html` 的 close/hide 逻辑，并用实机全屏 Cmd+W 确认是否还留黑屏 Space。上游已修复（关闭前自主退出全屏，或不再全屏隐藏）时移除 `guangya-window-guard.mjs`、启动注入调用、对应检查和状态记录，不留死补丁。
 - 系统磁力只接受显式 `magnet:?`，保留编码、去重并排队；检查登录后调用原生 `cloudAdd.openResolver`，不读写剪贴板、不自动保存。已运行只开弹窗，不重注入；正常手动启动助手会尝试注册 magnet 默认处理程序，运行前考虑该副作用。
 - 剪贴板适配仅在通过助手注入的光鸭进程内生效：`cloud-add-link.match` 仅显式磁力，`share-link.match` 保留完整链接优先并支持单个裸 shareId；保留原生轮询、登录/开关检查及后续处理。每进程首次安装限制后开启原生磁力开关，重复注入不强行重开；分享开关不自动修改。版本定位失败必须报错，不得增加第二个常驻监听器。
 - 共享 `getSelection()` 读取 React 当前提交树，同一提交的 selectedItems/dataSource，覆盖离屏项；缺失选中 ID 必须报错。导出、重命名、电影、剧集共用，修复需覆盖四入口。

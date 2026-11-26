@@ -1,5 +1,15 @@
 # 光鸭云盘注入脚本：任务进度与接续说明
 
+## 主窗口全屏关闭只回窗口化（2026-11-26）
+
+- 由安装包 `app.asar/out/main/index.cjs` 与实机日志确认：光鸭 1.1.3 在 macOS 关闭主窗口只 `preventDefault` 加 `hide()`（日志 "Main window hidden instead of closing on macOS"），全屏窗口隐藏后其 Space 会留成黑屏。
+- 新增 `guangya-window-guard.mjs`，只接管 `main.html` 主窗口自身的 `hide()`：全屏时改 `setFullScreen(false)` 并保留窗口，同时恢复 `excludedFromShownWindowsMenu`；非全屏隐藏与官方 close 处理不变。启动流程在剪贴板适配之后调用，返回 `windowGuardInstalled`，运行中新建的主窗口加载完成后补齐保护。
+- 源码 `--attach` 返回 `windowGuardInstalled=true`、`guardedWindows=1`；复验主窗口已挂自有 `hide`，非全屏隐藏正常，验证后已还原窗口可见性。全屏 Cmd+W 的界面结果待用户验收。
+- 新增 `scripts/check-window-guard.mjs`（全屏/非全屏、非主窗口、运行中新建窗口、重复注入、销毁与 dispose）。全部 JS/MJS 语法、`scripts/check-*.mjs`、磁力及剪贴板自检、`git diff --check` 通过；`dist/光鸭云助手.app` 已用内置 Node 重建，签名及内置脚本一致性校验通过。
+- 用户确认后备份旧助手至 `dist/backups/20261126-window-guard-0f73f1bf/光鸭云助手.app`，并替换 `/Applications/光鸭云助手.app`；安装后签名、bundle id、内置 Node v24.22.1 及全部脚本字节一致性校验通过。未重启客户端，冷启动与全屏 Cmd+W 界面结果待用户验收。
+- 未覆盖：`destroy()` 路径（退出登录、退出应用）在全屏销毁窗口；播放器窗口的全屏关闭。
+- `AGENTS.md` 已补充规则：光鸭升级后复查主窗口全屏关闭是否已由上游修复，确认修复后移除 `guangya-window-guard.mjs`、注入调用与对应检查。
+
 ## 更新已安装助手，恢复光鸭 1.1.3 注入（2026-11-25）
 
 - 当天启动日志确认 `/Applications/光鸭云助手.app` 初次 renderer 注入失败。安装包的 9 个业务脚本仍为 11 月 6 日版本，缺少 1.1.3 的 Rspack 及原生 UI 适配。现有 `dist/光鸭云助手.app` 包含修复，签名检查通过，内置脚本与仓库源码逐字节一致。

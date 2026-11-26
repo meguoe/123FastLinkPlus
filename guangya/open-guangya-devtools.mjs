@@ -4,6 +4,7 @@ import os from 'node:os';
 import { access, readFile } from 'node:fs/promises';
 import { installTmdbBridge } from './guangya-tmdb-bridge.mjs';
 import { installAppMenu } from './guangya-app-menu.mjs';
+import { installMainWindowFullscreenGuard } from './guangya-window-guard.mjs';
 import { installCloudTreeWorkerFix, normalizeMagnetLinks, openMagnetLinks } from './guangya-magnet.mjs';
 import { extendShareClipboard, restrictMagnetClipboard, locateMagnetClipboard, installMagnetClipboard } from './guangya-clipboard.mjs';
 
@@ -325,6 +326,9 @@ try {
   if (!clipboard?.clipboardMagnetOnly) throw Error('原生剪贴板磁力限制未安装');
   if (!clipboard?.clipboardShareId) throw Error('原生剪贴板 shareId 识别未安装');
   console.log(JSON.stringify(clipboard));
+  const windowGuard = await evaluate(`(${installMainWindowFullscreenGuard.toString()})()`);
+  if (!windowGuard?.windowGuardInstalled) throw Error('主窗口全屏关闭保护未安装');
+  console.log(JSON.stringify(windowGuard));
   // A link click in an already running app only opens the resolver; do not reinject active dialogs.
   if (!magnetLinks.length || !attach) {
     console.log(JSON.stringify(await evaluate(`(${installAppMenu.toString()})()`)));
